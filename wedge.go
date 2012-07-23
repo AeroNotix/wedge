@@ -128,6 +128,7 @@ func URL(re, name string, v view, t handlertype) *url {
 func StaticFiles(as string, paths ...string) *url {
 
 	return URL(as, "Static File", func(req *http.Request) (string, int) {
+		log.Println(req.URL.Path)
 		filename := req.URL.Path[len(as):]
 		b := []string{}
 
@@ -140,7 +141,6 @@ func StaticFiles(as string, paths ...string) *url {
 			// Attempt to open the file in using one of the paths
 			file, err := os.Open(filepath.Join(path, filename))
 			if err != nil {
-				log.Println(path, filename, "is not a file")
 				continue
 			}
 
