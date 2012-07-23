@@ -14,17 +14,16 @@ Usage:
 
 .. code-block:: go
 
-
     func HelloWorld(req *http.Request) interface{} {
 	    return "Hello world!"
     }
 
     func main() {
 
-	    wedge.Patterns(
-		    wedge.URL("/jsonhello", "HelloWorld", HelloWorld, wedge.JSON),
-      		wedge.URL("/", "HelloWorld", HelloWorld, wedge.HTTP),
-     	)
+	wedge.Patterns(
+		wedge.URL("/jsonhello", "HelloWorld", HelloWorld, wedge.JSON),
+		wedge.URL("/", "HelloWorld", HelloWorld, wedge.HTTP),
+	)
 
-    	wedge.Run("12345", 30)
+	wedge.Run("12345", 30)
     }
