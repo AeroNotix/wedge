@@ -25,6 +25,9 @@ type appServer struct {
 	timeout time.Duration
 }
 
+// Handler functions should match this signature
+type view func(*http.Request) string
+
 // This is the main 'event loop' for the web server. All requests are
 // sent to this handler, which checks the incoming request against
 // all the routes we have setup if it finds a match it will invoke
@@ -40,12 +43,12 @@ func (self *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			
 			switch route.viewtype {
 			case HTTP:
-				io.WriteString(w, resp.(string))
+				io.WriteString(w, resp)
 				return
 			case JSON:
 				w.Header().Set("Content-type", "application/json")
 				json.NewEncoder(w).Encode(map[string]string{
-					"message": resp.(string),
+					"message": resp,
 				})
 				return
 			default:
@@ -78,9 +81,6 @@ func (u *url) String() string {
 		"{\n  URL: %s\n  Handler: %s\n}", u.match, u.name,
 	)
 }
-
-// Handler functions should match this signature
-type view func(*http.Request) interface{}
 
 // URL is a function which returns a URL value.
 // re:
