@@ -115,6 +115,16 @@ func URL(re, name string, v view, t handlertype) *url {
 	}
 }
 
+// StaticFiles is a not so light wrapper around the URL function
+//
+// We start off receiving an 'as' string which marks the URL to which
+// we match against. We then take a []string which is filepaths to all
+// the locations in which an incoming file request should be checked
+// against. The file is read in chunks as per the module level constant
+// FileChunk.
+//
+// This function will return a file in a string format ready to be sent
+// across the wire.
 func StaticFiles(as string, paths ...string) *url {
 
 	return URL(as, "Static File", func(req *http.Request) (string, int) {
@@ -122,16 +132,20 @@ func StaticFiles(as string, paths ...string) *url {
 		b := []string{}
 
 		for _, path := range paths {
+			// Prevent Directory Traversal Attacks
 			if len(strings.Split(path, "..")) > 1 {
 				return "", http.StatusNotFound
 			}
 
+			// Attempt to open the file in using one of the paths
 			file, err := os.Open(filepath.Join(path, filename))
 			if err != nil {
 				log.Println(path, filename, "is not a file")
 				continue
 			}
 
+			// if we're here, the file exists and we just need to send
+			// it to the client.
 			for {
 				reader := make([]byte, FileChunks)
 				count, err := file.Read(reader)
