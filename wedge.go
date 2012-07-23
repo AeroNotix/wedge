@@ -1,32 +1,41 @@
 package wedge
 
 import (
-	"fmt"
-	"net/http"
-	"regexp"
-	"log"
-	"time"
-	"io"
 	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
 )
 
-const  (
+const (
 	HTTP = iota
 	JSON
 )
 
-var routes []*url
+const (
+	FileChunks = 1024
+)
+
+var (
+	routes []*url
+)
 
 type handlertype int
 
 type appServer struct {
-	port string
-	routes []*url
+	port    string
+	routes  []*url
 	timeout time.Duration
 }
 
 // Handler functions should match this signature
-type view func(*http.Request) string
+type view func(*http.Request) (string, int)
 
 // This is the main 'event loop' for the web server. All requests are
 // sent to this handler, which checks the incoming request against
@@ -34,13 +43,17 @@ type view func(*http.Request) string
 // the handler which is attached to that match.
 func (self *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	request := req.URL.Path
-	
+
 	for _, route := range self.routes {
 		matches := route.match.FindAllStringSubmatch(request, 1)
 		if len(matches) > 0 {
 			log.Println("Request:", route.name)
-			resp := route.handler(req)
-			
+			resp, err := route.handler(req)
+			if err == 404 {
+				http.NotFound(w, req)
+				return
+			}
+
 			switch route.viewtype {
 			case HTTP:
 				io.WriteString(w, resp)
@@ -56,6 +69,7 @@ func (self *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 	}
+	log.Println("404")
 	http.NotFound(w, req)
 }
 
@@ -70,9 +84,9 @@ func (self *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 //     Handler is a wedge.view function which we will use against any
 //     requests that match `match`.
 type url struct {
-	match *regexp.Regexp
-	name string
-	handler view
+	match    *regexp.Regexp
+	name     string
+	handler  view
 	viewtype handlertype
 }
 
@@ -91,14 +105,46 @@ func (u *url) String() string {
 // handler:
 //     Handler is a wedge.view function which we will use against any
 //     requests that match `match`.
-func URL(re, name string, v view, t handlertype)  *url {
+func URL(re, name string, v view, t handlertype) *url {
 	match := regexp.MustCompile(re)
 	return &url{
-		match: match,
-		name: name,
-		handler: v,
+		match:    match,
+		name:     name,
+		handler:  v,
 		viewtype: t,
 	}
+}
+
+func StaticFiles(as string, paths ...string) *url {
+
+	return URL(as, "Static File", func(req *http.Request) (string, int) {
+		filename := req.URL.Path[len(as):]
+		b := []string{}
+
+		for _, path := range paths {
+			if len(strings.Split(path, "..")) > 1 {
+				return "", http.StatusNotFound
+			}
+
+			file, err := os.Open(filepath.Join(path, filename))
+			if err != nil {
+				log.Println(path, filename, "is not a file")
+				continue
+			}
+
+			for {
+				reader := make([]byte, FileChunks)
+				count, err := file.Read(reader)
+				if err != nil {
+					return strings.Join(b, ""), http.StatusOK
+				}
+
+				b = append(b, string(reader[:count]))
+			}
+		}
+		return "", http.StatusNotFound
+	}, HTTP)
+
 }
 
 // Patterns is a helper function which mutates the global routes map
@@ -113,10 +159,14 @@ func Patterns(urls ...*url) {
 func Run(port string, timeout time.Duration) {
 	app := &appServer{port, routes, timeout}
 	server := http.Server{
-		Addr: ":"+app.port,
-		Handler: app,
-		ReadTimeout: app.timeout * time.Second, 
+		Addr:        ":" + app.port,
+		Handler:     app,
+		ReadTimeout: app.timeout * time.Second,
 	}
-	fmt.Println(fmt.Sprintf("Serving on PORT: %s", port))
-	server.ListenAndServe()
+	fmt.Printf("Serving on PORT: %s", port)
+	fmt.Println("\n")
+	err := server.ListenAndServe()
+	if err != nil {
+		fmt.Println(err)
+	}
 }
