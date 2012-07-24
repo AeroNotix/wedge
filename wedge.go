@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 const (
 	HTTP = iota
 	JSON
+	STATIC
 )
 
 const (
@@ -64,6 +66,14 @@ func (self *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 					"message": resp,
 				})
 				return
+			case STATIC:
+				if w.Header().Get("Content-Type") == "" {
+					reqstr := req.URL.Path[len(route.rawre):]
+					ctype := mime.TypeByExtension(filepath.Ext(reqstr))
+					w.Header().Set("Content-Type", ctype)
+				}
+				io.WriteString(w, resp)
+				return
 			default:
 				panic("Unknown handler type!")
 			}
@@ -84,11 +94,11 @@ func (self *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 //     Handler is a wedge.view function which we will use against any
 //     requests that match `match`.
 type url struct {
-	match *regexp.Regexp
-	name string
-	handler view
+	match    *regexp.Regexp
+	name     string
+	handler  view
 	viewtype handlertype
-	rawre string
+	rawre    string
 }
 
 func (u *url) String() string {
@@ -106,17 +116,16 @@ func (u *url) String() string {
 // handler:
 //     Handler is a wedge.view function which we will use against any
 //     requests that match `match`.
-func URL(re, name string, v view, t handlertype)  *url {
+func URL(re, name string, v view, t handlertype) *url {
 	match := regexp.MustCompile(re)
 	return &url{
-		match: match,
-		name: name,
-		handler: v,
+		match:    match,
+		name:     name,
+		handler:  v,
 		viewtype: t,
-		rawre: re,
+		rawre:    re,
 	}
 }
-
 
 // StaticFiles is a not so light wrapper around the URL function
 //
@@ -160,12 +169,12 @@ func StaticFiles(as string, paths ...string) *url {
 			}
 		}
 		return "", http.StatusNotFound
-	}, HTTP)
+	}, STATIC)
 
 }
 
 // Patterns is a helper function which returns a *[]*url.
-func Patterns(urls ...*url) (*[]*url) {
+func Patterns(urls ...*url) *[]*url {
 	r := make([]*url, 0)
 	for _, url := range urls {
 		r = append(r, url)
@@ -178,9 +187,9 @@ func Patterns(urls ...*url) (*[]*url) {
 func Run(patterns *[]*url, port string, timeout time.Duration) {
 	app := &appServer{port, *patterns, timeout}
 	server := http.Server{
-		Addr: ":"+app.port,
-		Handler: app,
-		ReadTimeout: app.timeout * time.Second, 
+		Addr:        ":" + app.port,
+		Handler:     app,
+		ReadTimeout: app.timeout * time.Second,
 	}
 	fmt.Printf("Serving on PORT: %s", port)
 	fmt.Println("\n")
