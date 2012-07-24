@@ -1,30 +1,41 @@
 package wedge
 
 import (
-	"fmt"
-	"net/http"
-	"regexp"
-	"log"
-	"time"
-	"io"
 	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
 )
 
-const  (
+const (
 	HTTP = iota
 	JSON
+)
+
+const (
+	FileChunks = 1024
+)
+
+var (
+	routes []*url
 )
 
 type handlertype int
 
 type appServer struct {
-	port string
-	routes []*url
+	port    string
+	routes  []*url
 	timeout time.Duration
 }
 
 // Handler functions should match this signature
-type view func(*http.Request) string
+type view func(*http.Request) (string, int)
 
 // This is the main 'event loop' for the web server. All requests are
 // sent to this handler, which checks the incoming request against
@@ -32,12 +43,16 @@ type view func(*http.Request) string
 // the handler which is attached to that match.
 func (self *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	request := req.URL.Path
-	
+
 	for _, route := range self.routes {
 		matches := route.match.FindAllStringSubmatch(request, 1)
 		if len(matches) > 0 {
-			log.Printf("Request on: %s Handled by: %s", route.rawre, route.name)
-			resp := route.handler(req)
+			log.Println("Request:", route.name)
+			resp, err := route.handler(req)
+			if err == 404 {
+				http.NotFound(w, req)
+				return
+			}
 
 			switch route.viewtype {
 			case HTTP:
@@ -54,28 +69,8 @@ func (self *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 	}
+	log.Println("404")
 	http.NotFound(w, req)
-}
-
-
-// URL is a function which returns a URL value.
-// re:
-//     re is a string which will be compiled to a *regexp.Regexp
-//     and will panic if the regular expression cannot be compiled
-// name:
-//     Name is a simple string of what the url should be referred to as
-// handler:
-//     Handler is a wedge.view function which we will use against any
-//     requests that match `match`.
-func URL(re, name string, v view, t handlertype)  *url {
-	match := regexp.MustCompile(re)
-	return &url{
-		match: match,
-		name: name,
-		handler: v,
-		viewtype: t,
-		rawre: re,
-	}
 }
 
 // Basic URL struct which holds a match, a name and a handler function
@@ -102,6 +97,73 @@ func (u *url) String() string {
 	)
 }
 
+// URL is a function which returns a URL value.
+// re:
+//     re is a string which will be compiled to a *regexp.Regexp
+//     and will panic if the regular expression cannot be compiled
+// name:
+//     Name is a simple string of what the url should be referred to as
+// handler:
+//     Handler is a wedge.view function which we will use against any
+//     requests that match `match`.
+func URL(re, name string, v view, t handlertype)  *url {
+	match := regexp.MustCompile(re)
+	return &url{
+		match: match,
+		name: name,
+		handler: v,
+		viewtype: t,
+		rawre: re,
+	}
+}
+
+
+// StaticFiles is a not so light wrapper around the URL function
+//
+// We start off receiving an 'as' string which marks the URL to which
+// we match against. We then take a []string which is filepaths to all
+// the locations in which an incoming file request should be checked
+// against. The file is read in chunks as per the module level constant
+// FileChunk.
+//
+// This function will return a file in a string format ready to be sent
+// across the wire.
+func StaticFiles(as string, paths ...string) *url {
+
+	return URL(as, "Static File", func(req *http.Request) (string, int) {
+		log.Println(req.URL.Path)
+		filename := req.URL.Path[len(as):]
+		b := []string{}
+
+		for _, path := range paths {
+			// Prevent Directory Traversal Attacks
+			if len(strings.Split(path, "..")) > 1 {
+				return "", http.StatusNotFound
+			}
+
+			// Attempt to open the file in using one of the paths
+			file, err := os.Open(filepath.Join(path, filename))
+			if err != nil {
+				continue
+			}
+
+			// if we're here, the file exists and we just need to send
+			// it to the client.
+			for {
+				reader := make([]byte, FileChunks)
+				count, err := file.Read(reader)
+				if err != nil {
+					return strings.Join(b, ""), http.StatusOK
+				}
+
+				b = append(b, string(reader[:count]))
+			}
+		}
+		return "", http.StatusNotFound
+	}, HTTP)
+
+}
+
 // Patterns is a helper function which returns a *[]*url.
 func Patterns(urls ...*url) (*[]*url) {
 	r := make([]*url, 0)
@@ -120,6 +182,10 @@ func Run(patterns *[]*url, port string, timeout time.Duration) {
 		Handler: app,
 		ReadTimeout: app.timeout * time.Second, 
 	}
-	fmt.Println(fmt.Sprintf("Serving on PORT: %s", port))
-	server.ListenAndServe()
+	fmt.Printf("Serving on PORT: %s", port)
+	fmt.Println("\n")
+	err := server.ListenAndServe()
+	if err != nil {
+		fmt.Println(err)
+	}
 }
