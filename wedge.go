@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	HTTP = iota
+	HTML = iota
 	JSON
 	STATIC
 )
@@ -57,7 +57,7 @@ func (self *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 
 			switch route.viewtype {
-			case HTTP:
+			case HTML:
 				io.WriteString(w, resp)
 				return
 			case JSON:
