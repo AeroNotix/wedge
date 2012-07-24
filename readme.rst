@@ -20,10 +20,11 @@ Usage:
 
     func main() {
 
-	wedge.Patterns(
+	patterns := wedge.Patterns(
+  		wedge.StaticFiles("/static/", filepath.Join(DIRNAME, "static/")),
 		wedge.URL("/jsonhello", "HelloWorld", HelloWorld, wedge.JSON),
 		wedge.URL("/", "HelloWorld", HelloWorld, wedge.HTTP),
 	)
 
-	wedge.Run("12345", 30)
+	wedge.Run(patterns, "12345", 30)
     }
