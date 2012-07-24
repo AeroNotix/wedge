@@ -15,8 +15,6 @@ const  (
 	JSON
 )
 
-var routes []*url
-
 type handlertype int
 
 type appServer struct {
@@ -38,9 +36,9 @@ func (self *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	for _, route := range self.routes {
 		matches := route.match.FindAllStringSubmatch(request, 1)
 		if len(matches) > 0 {
-			log.Println("Request:", route.name)
+			log.Printf("Request on: %s Handled by: %s", route.rawre, route.name)
 			resp := route.handler(req)
-			
+
 			switch route.viewtype {
 			case HTTP:
 				io.WriteString(w, resp)
@@ -59,28 +57,6 @@ func (self *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	http.NotFound(w, req)
 }
 
-// Basic URL struct which holds a match, a name and a handler function
-//
-// match:
-//     Match is a *regexp.Regexp which we will use to check incoming
-//     request URLs against and return the handler on any that match
-// name:
-//     Name is a simple string of what the url should be referred to as
-// handler:
-//     Handler is a wedge.view function which we will use against any
-//     requests that match `match`.
-type url struct {
-	match *regexp.Regexp
-	name string
-	handler view
-	viewtype handlertype
-}
-
-func (u *url) String() string {
-	return fmt.Sprintf(
-		"{\n  URL: %s\n  Handler: %s\n}", u.match, u.name,
-	)
-}
 
 // URL is a function which returns a URL value.
 // re:
@@ -98,20 +74,47 @@ func URL(re, name string, v view, t handlertype)  *url {
 		name: name,
 		handler: v,
 		viewtype: t,
+		rawre: re,
 	}
 }
 
-// Patterns is a helper function which mutates the global routes map
-// by adding a newly created url.
-func Patterns(urls ...*url) {
+// Basic URL struct which holds a match, a name and a handler function
+//
+// match:
+//     Match is a *regexp.Regexp which we will use to check incoming
+//     request URLs against and return the handler on any that match
+// name:
+//     Name is a simple string of what the url should be referred to as
+// handler:
+//     Handler is a wedge.view function which we will use against any
+//     requests that match `match`.
+type url struct {
+	match *regexp.Regexp
+	name string
+	handler view
+	viewtype handlertype
+	rawre string
+}
+
+func (u *url) String() string {
+	return fmt.Sprintf(
+		"{\n  URL: %s\n  Handler: %s\n}", u.match, u.name,
+	)
+}
+
+// Patterns is a helper function which returns a *[]*url.
+func Patterns(urls ...*url) (*[]*url) {
+	r := make([]*url, 0)
 	for _, url := range urls {
-		routes = append(routes, url)
+		r = append(r, url)
 	}
+
+	return &r
 }
 
 // Starts the server running on PORT `port` with the timeout duration
-func Run(port string, timeout time.Duration) {
-	app := &appServer{port, routes, timeout}
+func Run(patterns *[]*url, port string, timeout time.Duration) {
+	app := &appServer{port, *patterns, timeout}
 	server := http.Server{
 		Addr: ":"+app.port,
 		Handler: app,
