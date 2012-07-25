@@ -26,19 +26,33 @@ const (
 )
 
 var (
-	routes []*url
+	routes  []*url
+	TIMEOUT = time.Second
 )
 
 type handlertype int
 
-type appServer struct {
-	port    string
-	routes  []*url
-	timeout time.Duration
-}
-
 // Handler functions should match this signature
 type view func(*http.Request) (string, int)
+
+// appServer is our server instance which holds the ServeHTTP method
+// so that it satisfies the http.Server interface.
+type appServer struct {
+	port      string
+	routes    []*url
+	timeout   time.Duration
+	cache_map map[string]string
+}
+
+// appServer constructor
+func newAppServer(port string, patterns *[]*url, timeout time.Duration) *appServer {
+	return &appServer{
+		port:      port,
+		routes:    *patterns,
+		timeout:   timeout,
+		cache_map: make(map[string]string),
+	}
+}
 
 // This is the main 'event loop' for the web server. All requests are
 // sent to this handler, which checks the incoming request against
@@ -51,10 +65,11 @@ func (self *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		matches := route.match.FindAllStringSubmatch(request, 1)
 		if len(matches) > 0 {
 			log.Println("Request:", route.name)
-			resp, err := route.handler(req)
-			if err == 404 {
+
+			resp, status := self.getResponse(route, req)
+
+			if status == 404 {
 				http.NotFound(w, req)
-				return
 			}
 
 			switch route.viewtype {
@@ -88,6 +103,44 @@ func (self *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	http.NotFound(w, req)
 }
 
+// getResponse checks the *url's cache_duration, if the cache duration
+// is zero. Then we never cache the response. Otherwise, we check to
+// see if the cache_duration has passed by reading the timeout channel
+// if so, we run the URL handler associated with the route and store it's
+// new response value. We then store the response in the cache_map and
+// return it to the client.
+//
+// For now accessing the cache_map from multiple threads isn't safe
+// *at all*. The fix is pretty trivial but it means implementing a
+// thread safe map (easy).
+func (self *appServer) getResponse(route *url, req *http.Request) (string, int) {
+
+	if route.cache_duration == 0 {
+		return route.handler(req)
+	}
+
+	select {
+	case <-route.timeout:
+		go func(d time.Duration, ch chan bool) {
+			log.Println("Timed out")
+			f := time.After(d * TIMEOUT)
+			<-f
+			go func() {
+				ch <- true
+			}()
+		}(route.cache_duration, route.timeout)
+		resp, err := route.handler(req)
+		/******************************
+		 *needs to be made thread safe*    DON'T FORGET ABOUT THIS OR YOU WILL DIE IN A FIRE
+		 ******************************/
+		self.cache_map[route.rawre] = resp // this is not thread safe!!!!
+		return resp, err
+	default:
+		return self.cache_map[route.rawre], http.StatusOK
+	}
+	panic("unreachable")
+}
+
 // Basic URL struct which holds a match, a name and a handler function
 //
 // match:
@@ -99,11 +152,13 @@ func (self *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 //     Handler is a wedge.view function which we will use against any
 //     requests that match `match`.
 type url struct {
-	match    *regexp.Regexp
-	name     string
-	handler  view
-	viewtype handlertype
-	rawre    string
+	match          *regexp.Regexp
+	name           string
+	handler        view
+	viewtype       handlertype
+	rawre          string
+	cache_duration time.Duration
+	timeout        chan bool
 }
 
 func (u *url) String() string {
@@ -112,7 +167,32 @@ func (u *url) String() string {
 	)
 }
 
-// URL is a function which returns a URL value.
+// Unexported method which forms as the base method to return *url values
+//
+// We chose to do it like this because we can have specialized methods
+// which have a simply API but fill in certain blanks for this. And the
+// makeurl method can have a relatively clunky API since the work will
+// be done under the hood.
+func makeurl(re, name string, v view, t handlertype, duration time.Duration) *url {
+	match := regexp.MustCompile(re)
+	timeoutchan := make(chan bool)
+	if duration > 0 {
+		go func() {
+			timeoutchan <- true
+		}()
+	}
+	return &url{
+		match:          match,
+		name:           name,
+		handler:        v,
+		viewtype:       t,
+		rawre:          re,
+		cache_duration: duration,
+		timeout:        timeoutchan,
+	}
+}
+
+// URL is a function which returns a *url value.
 // re:
 //     re is a string which will be compiled to a *regexp.Regexp
 //     and will panic if the regular expression cannot be compiled
@@ -122,14 +202,7 @@ func (u *url) String() string {
 //     Handler is a wedge.view function which we will use against any
 //     requests that match `match`.
 func URL(re, name string, v view, t handlertype) *url {
-	match := regexp.MustCompile(re)
-	return &url{
-		match:    match,
-		name:     name,
-		handler:  v,
-		viewtype: t,
-		rawre:    re,
-	}
+	return makeurl(re, name, v, t, 0)
 }
 
 // StaticFiles is a not so light wrapper around the URL function
@@ -144,7 +217,7 @@ func URL(re, name string, v view, t handlertype) *url {
 // across the wire.
 func StaticFiles(as string, paths ...string) *url {
 
-	return URL(as, "Static File", func(req *http.Request) (string, int) {
+	return makeurl(as, "Static File", func(req *http.Request) (string, int) {
 		log.Println(req.URL.Path)
 		filename := req.URL.Path[len(as):]
 
@@ -160,9 +233,12 @@ func StaticFiles(as string, paths ...string) *url {
 			return out_data, http.StatusOK
 		}
 		return "", http.StatusNotFound
-	}, STATIC)
+	}, STATIC, 0)
 }
 
+// Favicon takes a path to some file which you want to be returned when
+// a request comes through for ^/favicon.ico$. By default this will cache
+// for TIMEOUT * 10.
 func Favicon(path string) *url {
 	file, err := os.Open(path)
 	if err != nil {
@@ -170,14 +246,14 @@ func Favicon(path string) *url {
 	}
 	file.Close()
 
-	return URL("^/favicon.ico$", "Favicon",
+	return makeurl("^/favicon.ico$", "Favicon",
 		func(req *http.Request) (string, int) {
 			out_data, err := readFile(path)
 			if err != nil {
 				return "", http.StatusNotFound
 			}
 			return out_data, http.StatusOK
-		}, ICON)
+		}, ICON, 10)
 }
 
 // Patterns is a helper function which returns a *[]*url.
@@ -230,7 +306,7 @@ func BasicReplace(template string, replacement_map map[string]string) string {
 
 // Starts the server running on PORT `port` with the timeout duration
 func Run(patterns *[]*url, port string, timeout time.Duration) {
-	app := &appServer{port, *patterns, timeout}
+	app := newAppServer(port, patterns, timeout)
 	server := http.Server{
 		Addr:        ":" + app.port,
 		Handler:     app,
