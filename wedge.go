@@ -156,6 +156,10 @@ func StaticFiles(as string, paths ...string) *url {
 				continue
 			}
 
+			// there is only one return but doing it this way means that
+			// further additions won't forget to close the fh
+			defer file.Close()
+
 			// if we're here, the file exists and we just need to send
 			// it to the client.
 			for {
@@ -170,8 +174,8 @@ func StaticFiles(as string, paths ...string) *url {
 		}
 		return "", http.StatusNotFound
 	}, STATIC)
-
 }
+
 
 // Patterns is a helper function which returns a *[]*url.
 func Patterns(urls ...*url) *[]*url {
@@ -181,6 +185,17 @@ func Patterns(urls ...*url) *[]*url {
 	}
 
 	return &r
+}
+
+// BasicReplace takes a string and a map[string]string which it uses
+// to replace any instances of a key by the value under it.
+func BasicReplace(template string, replacement_map map[string]string) string {
+	var replacements []string
+	for key, val := range replacement_map {
+		replacements = append(replacements, key, val)
+	}
+	replacer := strings.NewReplacer(replacements...)
+	return replacer.Replace(template)
 }
 
 // Starts the server running on PORT `port` with the timeout duration
