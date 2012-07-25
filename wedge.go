@@ -18,6 +18,7 @@ const (
 	HTML = iota
 	JSON
 	STATIC
+	ICON
 )
 
 const (
@@ -74,12 +75,16 @@ func (self *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				}
 				io.WriteString(w, resp)
 				return
+			case ICON:
+				w.Header().Set("Content-Type", "image/x-icon")
+				io.WriteString(w, resp)
+				return
 			default:
 				panic("Unknown handler type!")
 			}
 		}
 	}
-	log.Println("404")
+	log.Println("404", req.URL.Path)
 	http.NotFound(w, req)
 }
 
@@ -142,40 +147,38 @@ func StaticFiles(as string, paths ...string) *url {
 	return URL(as, "Static File", func(req *http.Request) (string, int) {
 		log.Println(req.URL.Path)
 		filename := req.URL.Path[len(as):]
-		b := []string{}
 
 		for _, path := range paths {
 			// Prevent Directory Traversal Attacks
 			if len(strings.Split(path, "..")) > 1 {
 				return "", http.StatusNotFound
 			}
-
-			// Attempt to open the file in using one of the paths
-			file, err := os.Open(filepath.Join(path, filename))
+			out_data, err := readFile(filepath.Join(path, filename))
 			if err != nil {
 				continue
 			}
-
-			// there is only one return but doing it this way means that
-			// further additions won't forget to close the fh
-			defer file.Close()
-
-			// if we're here, the file exists and we just need to send
-			// it to the client.
-			for {
-				reader := make([]byte, FileChunks)
-				count, err := file.Read(reader)
-				if err != nil {
-					return strings.Join(b, ""), http.StatusOK
-				}
-
-				b = append(b, string(reader[:count]))
-			}
+			return out_data, http.StatusOK
 		}
 		return "", http.StatusNotFound
 	}, STATIC)
 }
 
+func Favicon(path string) *url {
+	file, err := os.Open(path)
+	if err != nil {
+		panic(err)
+	}
+	file.Close()
+
+	return URL("^/favicon.ico$", "Favicon",
+		func(req *http.Request) (string, int) {
+			out_data, err := readFile(path)
+			if err != nil {
+				return "", http.StatusNotFound
+			}
+			return out_data, http.StatusOK
+		}, ICON)
+}
 
 // Patterns is a helper function which returns a *[]*url.
 func Patterns(urls ...*url) *[]*url {
@@ -185,6 +188,33 @@ func Patterns(urls ...*url) *[]*url {
 	}
 
 	return &r
+}
+
+// Helper method which reads a file into memory or returns an error
+//
+// Used in both Favicon and StaticFiles
+func readFile(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	// there is only one return but doing it this way means that
+	// further additions won't forget to close the fh
+	defer file.Close()
+
+	// if we're here, the file exists and we just need to send
+	// it to the client.
+	b := []string{}
+	for {
+		reader := make([]byte, FileChunks)
+		count, err := file.Read(reader)
+		if err != nil {
+			return strings.Join(b, ""), nil
+		}
+
+		b = append(b, string(reader[:count]))
+	}
+	panic("Unreachable!")
 }
 
 // BasicReplace takes a string and a map[string]string which it uses
