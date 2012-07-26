@@ -41,7 +41,7 @@ type appServer struct {
 	port      string
 	routes    []*url
 	timeout   time.Duration
-	cache_map map[string]string
+	cache_map *safeMap
 }
 
 // appServer constructor
@@ -50,7 +50,7 @@ func newAppServer(port string, patterns *[]*url, timeout time.Duration) *appServ
 		port:      port,
 		routes:    *patterns,
 		timeout:   timeout,
-		cache_map: make(map[string]string),
+		cache_map: NewSafeMap(),
 	}
 }
 
@@ -130,13 +130,12 @@ func (self *appServer) getResponse(route *url, req *http.Request) (string, int) 
 			}()
 		}(route.cache_duration, route.timeout)
 		resp, err := route.handler(req)
-		/******************************
-		 *needs to be made thread safe*    DON'T FORGET ABOUT THIS OR YOU WILL DIE IN A FIRE
-		 ******************************/
-		self.cache_map[route.rawre] = resp // this is not thread safe!!!!
+		if !self.cache_map.Insert(route.rawre, resp) {
+			panic("Inserting into cache_map failure!")
+		}
 		return resp, err
 	default:
-		return self.cache_map[route.rawre], http.StatusOK
+		return self.cache_map.Find(route.rawre).(string), http.StatusOK
 	}
 	panic("unreachable")
 }
@@ -210,7 +209,7 @@ func URL(re, name string, v view, t handlertype) *url {
 // We start off receiving an 'as' string which marks the URL to which
 // we match against. We then take a []string which is filepaths to all
 // the locations in which an incoming file request should be checked
-// against. The file is read in chunks as per the module level constant
+// against. The file is read in chunks as per the module level constant4
 // FileChunk.
 //
 // This function will return a file in a string format ready to be sent
