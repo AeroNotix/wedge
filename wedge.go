@@ -130,12 +130,20 @@ func (self *appServer) getResponse(route *url, req *http.Request) (string, int) 
 			}()
 		}(route.cache_duration, route.timeout)
 		resp, err := route.handler(req)
-		if !self.cache_map.Insert(route.rawre, resp) {
+		if !self.cache_map.Insert(req.URL.Path, resp) {
 			panic("Inserting into cache_map failure!")
 		}
 		return resp, err
 	default:
-		return self.cache_map.Find(route.rawre).(string), http.StatusOK
+		resp, ok := self.cache_map.Find(req.URL.Path).(string)
+		if !ok {
+			resp, _ = route.handler(req)
+
+		}
+		if !self.cache_map.Insert(req.URL.Path, resp) {
+			panic("Inserting into cache_map failure!")
+		}
+		return resp, http.StatusOK
 	}
 	panic("unreachable")
 }
@@ -180,6 +188,10 @@ func makeurl(re, name string, v view, t handlertype, duration time.Duration) *ur
 			timeoutchan <- true
 		}()
 	}
+	if duration < 0 {
+		duration = 30 * 12 * 30 * time.Hour
+	}
+
 	return &url{
 		match:          match,
 		name:           name,
@@ -232,7 +244,11 @@ func StaticFiles(as string, paths ...string) *url {
 			return out_data, http.StatusOK
 		}
 		return "", http.StatusNotFound
-	}, STATIC, 0)
+	}, STATIC, -1)
+}
+
+func CacheURL(re, name string, v view, t handlertype, d time.Duration) *url {
+	return makeurl(re, name, v, t, d)
 }
 
 // Favicon takes a path to some file which you want to be returned when
@@ -252,7 +268,7 @@ func Favicon(path string) *url {
 				return "", http.StatusNotFound
 			}
 			return out_data, http.StatusOK
-		}, ICON, 10)
+		}, ICON, -1)
 }
 
 // Patterns is a helper function which returns a *[]*url.
