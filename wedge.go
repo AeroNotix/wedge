@@ -39,37 +39,97 @@ type view func(*http.Request) (string, int)
 // so that it satisfies the http.Server interface.
 type appServer struct {
 	port      string
-	routes    []*url
+	routes   []*url
 	timeout   time.Duration
 	cache_map *safeMap
+	handler404 view
+	stat_map *safeMap
 }
 
 // appServer constructor
-func newAppServer(port string, patterns *[]*url, timeout time.Duration) *appServer {
+func NewAppServer(port string, timeout time.Duration) *appServer {
 	return &appServer{
 		port:      port,
-		routes:    *patterns,
+		routes:    make([]*url, 0),
 		timeout:   timeout,
 		cache_map: NewSafeMap(),
 	}
+}
+
+// Attaches more *urls to the Routes slice on the appServer value
+func (App *appServer) AddURLs(patterns ...*url) {
+	for _, url := range patterns {
+		App.routes = append(App.routes, url)
+	}
+}
+
+func (App *appServer) EnableStatTracking() {
+	App.stat_map = NewSafeMap()
+
+	staturl := makeurl("^/statistics/?$", "Statistics", func(req *http.Request) (string, int) {
+
+		rawdata, ok := App.stat_map.Do(func(m map[interface{}]interface{}) interface{} {
+			// we could return m here but that would mean we've broken the
+			// reason why we made the map safe in the first place.
+
+			outstr := "<table>"
+			for key, value := range m {
+				outstr += fmt.Sprintf("<tr><td>%s</td>", key.(string))
+				outstr += fmt.Sprintf("<td>%d</td></tr>", value.(int))
+			}
+			outstr += "</table>"
+			return outstr
+		})
+
+		if !ok { return "Failure getting data", 500 }
+		return rawdata.(string), 200
+
+	}, HTML, 0)
+	App.routes = append(App.routes, staturl)
+}
+
+func (App *appServer) incrementStats(k string) {
+
+	go App.stat_map.Do(func(m map[interface{}]interface{}) interface{} {
+		val, ok := m[k]
+		if ok {
+			val, ok := val.(int)
+			if ok {
+				val++
+				m[k] = val
+			}
+		} else {
+			m[k] = 1
+		}
+		return true
+	})
+}
+
+
+// Sets the 404 Handler for the appServer to fn.
+func (App *appServer) Handler404(fn view) {
+	App.handler404 = fn
 }
 
 // This is the main 'event loop' for the web server. All requests are
 // sent to this handler, which checks the incoming request against
 // all the routes we have setup if it finds a match it will invoke
 // the handler which is attached to that match.
-func (self *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func (App *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	request := req.URL.Path
 
-	for _, route := range self.routes {
+	for _, route := range App.routes {
 		matches := route.match.FindAllStringSubmatch(request, 1)
 		if len(matches) > 0 {
-			log.Println("Request:", route.name)
-
-			resp, status := self.getResponse(route, req)
+			log.Println("Request:", route.name, request)
+			if App.stat_map != nil {
+				App.incrementStats(route.name)
+			}
+			resp, status := App.getResponse(route, req)
 
 			if status == 404 {
-				http.NotFound(w, req)
+				App.handle404req(w, req)
+				return
 			}
 
 			switch route.viewtype {
@@ -99,8 +159,24 @@ func (self *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 	}
+
+	App.handle404req(w, req)
+	return
+}
+
+func (App *appServer) handle404req (w http.ResponseWriter, req *http.Request) {
 	log.Println("404", req.URL.Path)
-	http.NotFound(w, req)
+	App.incrementStats("404")
+	w.WriteHeader(404)
+
+	if App.handler404 != nil {
+		resp, _ := App.handler404(req)
+		io.WriteString(w, resp)
+		return
+	} else {
+		http.NotFound(w, req)
+		return
+	}
 }
 
 // getResponse checks the *url's cache_duration, if the cache duration
@@ -110,10 +186,11 @@ func (self *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 // new response value. We then store the response in the cache_map and
 // return it to the client.
 //
-// For now accessing the cache_map from multiple threads isn't safe
-// *at all*. The fix is pretty trivial but it means implementing a
-// thread safe map (easy).
-func (self *appServer) getResponse(route *url, req *http.Request) (string, int) {
+// Accessing the cache_map from multiple threads is safe. There are two
+// implementations of a safe map included with this library. One is sync'd
+// with channels (safeMap) and the other is sync'd with a mutex lock
+// (lockMap).
+func (App *appServer) getResponse(route *url, req *http.Request) (string, int) {
 
 	if route.cache_duration == 0 {
 		return route.handler(req)
@@ -130,17 +207,17 @@ func (self *appServer) getResponse(route *url, req *http.Request) (string, int) 
 			}()
 		}(route.cache_duration, route.timeout)
 		resp, err := route.handler(req)
-		if !self.cache_map.Insert(req.URL.Path, resp) {
+		if !App.cache_map.Insert(req.URL.Path, resp) {
 			panic("Inserting into cache_map failure!")
 		}
 		return resp, err
 	default:
-		resp, ok := self.cache_map.Find(req.URL.Path).(string)
+		resp, ok := App.cache_map.Find(req.URL.Path).(string)
 		if !ok {
 			resp, _ = route.handler(req)
 
 		}
-		if !self.cache_map.Insert(req.URL.Path, resp) {
+		if !App.cache_map.Insert(req.URL.Path, resp) {
 			panic("Inserting into cache_map failure!")
 		}
 		return resp, http.StatusOK
@@ -271,15 +348,6 @@ func Favicon(path string) *url {
 		}, ICON, -1)
 }
 
-// Patterns is a helper function which returns a *[]*url.
-func Patterns(urls ...*url) *[]*url {
-	r := make([]*url, 0)
-	for _, url := range urls {
-		r = append(r, url)
-	}
-
-	return &r
-}
 
 // Helper method which reads a file into memory or returns an error
 //
@@ -320,15 +388,13 @@ func BasicReplace(template string, replacement_map map[string]string) string {
 }
 
 // Starts the server running on PORT `port` with the timeout duration
-func Run(patterns *[]*url, port string, timeout time.Duration) {
-	app := newAppServer(port, patterns, timeout)
+func (App *appServer) Run() {
 	server := http.Server{
-		Addr:        ":" + app.port,
-		Handler:     app,
-		ReadTimeout: app.timeout * time.Second,
+		Addr:        ":" + App.port,
+		Handler:     App,
+		ReadTimeout: App.timeout * time.Second,
 	}
-	fmt.Printf("Serving on PORT: %s", port)
-	fmt.Println("\n")
+	fmt.Printf("Serving on PORT: %s\n", App.port)
 	err := server.ListenAndServe()
 	if err != nil {
 		fmt.Println(err)
