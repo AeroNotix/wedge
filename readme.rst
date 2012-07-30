@@ -33,6 +33,6 @@ Usage:
     		wedge.CacheURL("^/$", "Index", Index, wedge.HTML, -1),
     	)
     	App.Handler404(Page404)
-    	App.EnableStatTracking()
+    	App.EnableStatTracking()      // stat tracking on ^/statistics/?$
     	App.Run()
     }
