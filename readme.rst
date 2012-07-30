@@ -14,17 +14,25 @@ Usage:
 
 .. code-block:: go
 
-    func HelloWorld(req *http.Request) interface{} {
-	    return "Hello world!"
+    // Main page
+    func Index(req *http.Request) (string, int) {
+        return "Hello world!", http.StatusOK
+    }
+
+    func Page404(req *http.Request) (string, int) {
+    	return "An oopsie!", http.StatusNotFound
     }
 
     func main() {
 
-	patterns := wedge.Patterns(
-  		wedge.StaticFiles("/static/", filepath.Join(DIRNAME, "static/")),
-		wedge.URL("/jsonhello", "HelloWorld", HelloWorld, wedge.JSON),
-		wedge.URL("/", "HelloWorld", HelloWorld, wedge.HTTP),
-	)
-
-	wedge.Run(patterns, "12345", 30)
+    	App := wedge.NewAppServer(12345, 30)
+    	App.AddURLs(
+    		wedge.Favicon(filepath.Join(DIRNAME, "static", "favicon.ico")),
+    		wedge.StaticFiles("/static/", filepath.Join(DIRNAME, "static/")),
+    		wedge.URL("^/awesome/$", "Getting awesome", Awsum, wedge.HTML),
+    		wedge.CacheURL("^/$", "Index", Index, wedge.HTML, -1),
+    	)
+    	App.Handler404(Page404)
+    	App.EnableStatTracking()
+    	App.Run()
     }
