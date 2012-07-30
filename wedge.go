@@ -1,3 +1,5 @@
+// Package wedge is a lightweight web framework which intends to
+// cut-down on oft written boilerplate code
 package wedge
 
 import (
@@ -38,12 +40,12 @@ type view func(*http.Request) (string, int)
 // appServer is our server instance which holds the ServeHTTP method
 // so that it satisfies the http.Server interface.
 type appServer struct {
-	port      string
-	routes   []*url
-	timeout   time.Duration
-	cache_map *safeMap
+	port       string
+	routes     []*url
+	timeout    time.Duration
+	cache_map  *safeMap
 	handler404 view
-	stat_map *safeMap
+	stat_map   *safeMap
 }
 
 // appServer constructor
@@ -63,6 +65,13 @@ func (App *appServer) AddURLs(patterns ...*url) {
 	}
 }
 
+// EnableStatTracking does exactly what it says on the tin
+//
+// EnableStatTracking creates a NewSafeMap under the stat_map field which will
+// then be used to increment and aggregate hits to URLs.
+//
+// This function will append a new *url onto the associated appServer. The url
+// which this is under is ^/statistics/?$.
 func (App *appServer) EnableStatTracking() {
 	App.stat_map = NewSafeMap()
 
@@ -81,7 +90,9 @@ func (App *appServer) EnableStatTracking() {
 			return outstr
 		})
 
-		if !ok { return "Failure getting data", 500 }
+		if !ok {
+			return "Failure getting data", 500
+		}
 		return rawdata.(string), 200
 
 	}, HTML, 0)
@@ -89,7 +100,9 @@ func (App *appServer) EnableStatTracking() {
 }
 
 func (App *appServer) incrementStats(k string) {
-
+	if App.stat_map == nil {
+		panic("Cannot increment statistics when it has not been enabled!")
+	}
 	go App.stat_map.Do(func(m map[interface{}]interface{}) interface{} {
 		val, ok := m[k]
 		if ok {
@@ -104,7 +117,6 @@ func (App *appServer) incrementStats(k string) {
 		return true
 	})
 }
-
 
 // Sets the 404 Handler for the appServer to fn.
 func (App *appServer) Handler404(fn view) {
@@ -159,12 +171,13 @@ func (App *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 	}
-
 	App.handle404req(w, req)
 	return
 }
 
-func (App *appServer) handle404req (w http.ResponseWriter, req *http.Request) {
+// handle404req checks if the 404 handler is a custom one and uses that, if not,
+// it uses the built-in NotFound function.
+func (App *appServer) handle404req(w http.ResponseWriter, req *http.Request) {
 	log.Println("404", req.URL.Path)
 	App.incrementStats("404")
 	w.WriteHeader(404)
@@ -189,7 +202,7 @@ func (App *appServer) handle404req (w http.ResponseWriter, req *http.Request) {
 // Accessing the cache_map from multiple threads is safe. There are two
 // implementations of a safe map included with this library. One is sync'd
 // with channels (safeMap) and the other is sync'd with a mutex lock
-// (lockMap).
+// (lockMap). We currently use the safeMap.
 func (App *appServer) getResponse(route *url, req *http.Request) (string, int) {
 
 	if route.cache_duration == 0 {
@@ -304,11 +317,8 @@ func URL(re, name string, v view, t handlertype) *url {
 // This function will return a file in a string format ready to be sent
 // across the wire.
 func StaticFiles(as string, paths ...string) *url {
-
 	return makeurl(as, "Static File", func(req *http.Request) (string, int) {
-		log.Println(req.URL.Path)
 		filename := req.URL.Path[len(as):]
-
 		for _, path := range paths {
 			// Prevent Directory Traversal Attacks
 			if len(strings.Split(path, "..")) > 1 {
@@ -324,6 +334,7 @@ func StaticFiles(as string, paths ...string) *url {
 	}, STATIC, -1)
 }
 
+// CacheURL returns a URL which has caching enabled for time.Duration d.
 func CacheURL(re, name string, v view, t handlertype, d time.Duration) *url {
 	return makeurl(re, name, v, t, d)
 }
@@ -347,7 +358,6 @@ func Favicon(path string) *url {
 			return out_data, http.StatusOK
 		}, ICON, -1)
 }
-
 
 // Helper method which reads a file into memory or returns an error
 //

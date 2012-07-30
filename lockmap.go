@@ -8,7 +8,7 @@ type lockMap struct {
 }
 
 type lockJob struct {
-	key interface{}
+	key   interface{}
 	value interface{}
 }
 

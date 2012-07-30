@@ -31,7 +31,7 @@ type job struct {
 	key            interface{}
 	value          interface{}
 	return_channel chan returnData
-	updater func(map[interface{}]interface{}) interface{}
+	updater        func(map[interface{}]interface{}) interface{}
 }
 
 // Encapsulates the responses from interacting with the async
@@ -82,6 +82,9 @@ func NewSafeMap() *safeMap {
 	return &m
 }
 
+// Insert safely inserts the `value` under the `key`.
+// Example:
+//     m.Insert("Key", "Value")
 func (m *safeMap) Insert(key, value interface{}) bool {
 	newJob := job{insert, key, value, make(chan returnData), nil}
 	m.jobchannel <- &newJob
@@ -89,6 +92,11 @@ func (m *safeMap) Insert(key, value interface{}) bool {
 	return (<-newJob.return_channel).success
 }
 
+// Find safely finds the value under the `key`.
+// Example:
+//     val := m.Find("Key")
+//     fmt.Println(val)
+//     >>>"Value"
 func (m *safeMap) Find(key interface{}) interface{} {
 	newJob := job{find, key, "", make(chan returnData), nil}
 	m.jobchannel <- &newJob
@@ -96,6 +104,8 @@ func (m *safeMap) Find(key interface{}) interface{} {
 	return (<-newJob.return_channel).value
 }
 
+// Delete safely deletes the entry under `key`
+// Exa
 func (m *safeMap) Delete(key interface{}) bool {
 	newJob := job{remove, key, "", make(chan returnData), nil}
 	m.jobchannel <- &newJob

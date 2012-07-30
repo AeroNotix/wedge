@@ -1,8 +1,8 @@
 package wedge
 
 import (
-	"testing"
 	"runtime"
+	"testing"
 )
 
 func init() {
@@ -13,7 +13,7 @@ func BenchmarkLockMap(b *testing.B) {
 	b.StopTimer()
 	m := NewLockMap()
 	b.StartTimer()
-	for x:=0; x<b.N; x++ {
+	for x := 0; x < b.N; x++ {
 		m.Insert(x, x)
 	}
 }
@@ -22,7 +22,7 @@ func BenchmarkChanMap(b *testing.B) {
 	b.StopTimer()
 	m := NewSafeMap()
 	b.StartTimer()
-	for x := 0;x < b.N; x++ {
+	for x := 0; x < b.N; x++ {
 		m.Insert(x, x)
 	}
 }
@@ -30,11 +30,11 @@ func BenchmarkChanMap(b *testing.B) {
 func BenchmarkLockMapFind(b *testing.B) {
 	b.StopTimer()
 	m := NewLockMap()
-	for x := 0;x < b.N; x++ {
+	for x := 0; x < b.N; x++ {
 		m.Insert(x, x)
 	}
 	b.StartTimer()
-	for x := 0;x < b.N; x++ {
+	for x := 0; x < b.N; x++ {
 		m.Find(x)
 	}
 }
@@ -42,11 +42,11 @@ func BenchmarkLockMapFind(b *testing.B) {
 func BenchmarkChanMapFind(b *testing.B) {
 	b.StopTimer()
 	m := NewSafeMap()
-	for x := 0;x < b.N; x++ {
+	for x := 0; x < b.N; x++ {
 		m.Insert(x, x)
 	}
 	b.StartTimer()
-	for x := 0;x < b.N; x++ {
+	for x := 0; x < b.N; x++ {
 		m.Find(x)
 	}
 }
