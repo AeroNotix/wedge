@@ -5,6 +5,7 @@ const (
 	remove
 	find
 	finish
+	do
 )
 
 type jobCode int
@@ -30,6 +31,7 @@ type job struct {
 	key            interface{}
 	value          interface{}
 	return_channel chan returnData
+	updater func(map[interface{}]interface{}) interface{}
 }
 
 // Encapsulates the responses from interacting with the async
@@ -69,6 +71,8 @@ func NewSafeMap() *safeMap {
 			case find:
 				val, ok := m.safe[job.key]
 				job.return_channel <- returnData{val, ok}
+			case do:
+				job.return_channel <- returnData{value: job.updater(m.safe), success: true}
 			case finish:
 				close(m.jobchannel)
 				job.return_channel <- returnData{success: true}
@@ -79,27 +83,34 @@ func NewSafeMap() *safeMap {
 }
 
 func (m *safeMap) Insert(key, value interface{}) bool {
-	newJob := job{insert, key, value, make(chan returnData)}
+	newJob := job{insert, key, value, make(chan returnData), nil}
 	m.jobchannel <- &newJob
 
 	return (<-newJob.return_channel).success
 }
 
 func (m *safeMap) Find(key interface{}) interface{} {
-	newJob := job{find, key, "", make(chan returnData)}
+	newJob := job{find, key, "", make(chan returnData), nil}
 	m.jobchannel <- &newJob
 
 	return (<-newJob.return_channel).value
 }
 
 func (m *safeMap) Delete(key interface{}) bool {
-	newJob := job{remove, key, "", make(chan returnData)}
+	newJob := job{remove, key, "", make(chan returnData), nil}
 	m.jobchannel <- &newJob
 	return (<-newJob.return_channel).success
 }
 
 func (m *safeMap) Finish(key interface{}) bool {
-	newJob := job{finish, key, "", make(chan returnData)}
+	newJob := job{finish, key, "", make(chan returnData), nil}
 	m.jobchannel <- &newJob
 	return (<-newJob.return_channel).success
+}
+
+func (m *safeMap) Do(fn func(map[interface{}]interface{}) interface{}) (interface{}, bool) {
+	newJob := job{do, "", "", make(chan returnData), fn}
+	m.jobchannel <- &newJob
+	rvals := <-newJob.return_channel
+	return rvals.value, rvals.success
 }
