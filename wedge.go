@@ -99,10 +99,15 @@ func (App *appServer) EnableStatTracking() {
 	App.routes = append(App.routes, staturl)
 }
 
+// incrementStats is a non-blocking method to increment a page counter
+// for individual routes.
 func (App *appServer) incrementStats(k string) {
 	if App.stat_map == nil {
 		panic("Cannot increment statistics when it has not been enabled!")
 	}
+
+	// create a goroutine which sends a function literal to the async
+	// map which tries to increment the value under the k string.
 	go App.stat_map.Do(func(m map[interface{}]interface{}) interface{} {
 		val, ok := m[k]
 		if ok {
@@ -273,13 +278,17 @@ func (u *url) String() string {
 func makeurl(re, name string, v view, t handlertype, duration time.Duration) *url {
 	match := regexp.MustCompile(re)
 	timeoutchan := make(chan bool)
+
+	// Initialize the channel and seed with a value
+	// so the first request will put the response
+	// into memory
+	if duration < 0 {
+		duration = 30 * 12 * 30 * time.Hour
+	}
 	if duration > 0 {
 		go func() {
 			timeoutchan <- true
 		}()
-	}
-	if duration < 0 {
-		duration = 30 * 12 * 30 * time.Hour
 	}
 
 	return &url{
