@@ -15,17 +15,17 @@ type safeMap struct {
 	jobchannel chan *job
 }
 
-// job is a type which has the required information to pass
-// a job to the async map.
-//
-// jobType is the name of the job you want to use, they are
-// consts of type int.
-//
-// key/value are the data you wish to use with the map.
-//
-// return_channel is the channel on which you will send updates
-// to the caller on how the call succeeded and any data which
-// came with it (in the case of finds)
+// job is a type which has the required information to pass
+// a job to the async map.
+//
+// jobType is the name of the job you want to use, they are
+// consts of type int.
+//
+// key/value are the data you wish to use with the map.
+//
+// return_channel is the channel on which you will send updates
+// to the caller on how the call succeeded and any data which
+// came with it (in the case of finds)
 type job struct {
 	jobType        jobCode
 	key            interface{}
@@ -34,25 +34,25 @@ type job struct {
 	updater        func(map[interface{}]interface{}) interface{}
 }
 
-// Encapsulates the responses from interacting with the async
-// map
+// Encapsulates the responses from interacting with the async
+// map
 type returnData struct {
 	value   interface{}
 	success bool
 }
 
-// NewSafeMap returns a pointer to the unexported type safeMap
-//
-// safeMap has methods attached to it which let us asychronously
-// interact with a map[interface{}]interface{}.
-//
-// We start off by creating a job channel, then a safeMap value
-// which has a reference to the previously made channel. We then
-// create a closure which captures the safeMap value and we also
-// pass in the job channel. We do this so that we can mark the
-// channel as read-only. Otherwise write operations would be pos-
-// sible on that channel and that would make for some interesting
-// debugging!
+// NewSafeMap returns a pointer to the unexported type safeMap
+//
+// safeMap has methods attached to it which let us asychronously
+// interact with a map[interface{}]interface{}.
+//
+// We start off by creating a job channel, then a safeMap value
+// which has a reference to the previously made channel. We then
+// create a closure which captures the safeMap value and we also
+// pass in the job channel. We do this so that we can mark the
+// channel as read-only. Otherwise write operations would be pos-
+// sible on that channel and that would make for some interesting
+// debugging!
 func NewSafeMap() *safeMap {
 	ch := make(chan *job)
 	m := safeMap{
@@ -105,7 +105,8 @@ func (m *safeMap) Find(key interface{}) interface{} {
 }
 
 // Delete safely deletes the entry under `key`
-// Exa
+// Example:
+//     m.Delete("Key")
 func (m *safeMap) Delete(key interface{}) bool {
 	newJob := job{remove, key, "", make(chan returnData), nil}
 	m.jobchannel <- &newJob
