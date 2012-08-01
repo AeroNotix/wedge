@@ -9,9 +9,11 @@ const (
 )
 
 type jobCode int
+type freemap map[interface{}]interface{}
+type freefunc func(map[interface{}]interface{}) interface{}
 
 type safeMap struct {
-	safe       map[interface{}]interface{}
+	safe       freemap
 	jobchannel chan *job
 }
 
@@ -31,7 +33,7 @@ type job struct {
 	key            interface{}
 	value          interface{}
 	return_channel chan returnData
-	updater        func(map[interface{}]interface{}) interface{}
+	updater        freefunc
 }
 
 // Encapsulates the responses from interacting with the async
@@ -56,7 +58,7 @@ type returnData struct {
 func NewSafeMap() *safeMap {
 	ch := make(chan *job)
 	m := safeMap{
-		safe:       make(map[interface{}]interface{}),
+		safe:       make(freemap),
 		jobchannel: ch,
 	}
 	go func(jobs <-chan *job) {
@@ -119,7 +121,7 @@ func (m *safeMap) Finish(key interface{}) bool {
 	return (<-newJob.return_channel).success
 }
 
-func (m *safeMap) Do(fn func(map[interface{}]interface{}) interface{}) (interface{}, bool) {
+func (m *safeMap) Do(fn freefunc) (interface{}, bool) {
 	newJob := job{do, "", "", make(chan returnData), fn}
 	m.jobchannel <- &newJob
 	rvals := <-newJob.return_channel

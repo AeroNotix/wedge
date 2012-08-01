@@ -77,7 +77,7 @@ func (App *appServer) EnableStatTracking() {
 
 	staturl := makeurl("^/statistics/?$", "Statistics", func(req *http.Request) (string, int) {
 
-		rawdata, ok := App.stat_map.Do(func(m map[interface{}]interface{}) interface{} {
+		rawdata, ok := App.stat_map.Do(func(m freefunc) {
 			// we could return m here but that would mean we've broken the
 			// reason why we made the map safe in the first place.
 
@@ -108,7 +108,7 @@ func (App *appServer) incrementStats(k string) {
 
 	// create a goroutine which sends a function literal to the async
 	// map which tries to increment the value under the k string.
-	go App.stat_map.Do(func(m map[interface{}]interface{}) interface{} {
+	go App.stat_map.Do(func(m freefunc) {
 		val, ok := m[k]
 		if ok {
 			val, ok := val.(int)
