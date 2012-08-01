@@ -10,7 +10,7 @@ const (
 
 type jobCode int
 type freemap map[interface{}]interface{}
-type freefunc func(map[interface{}]interface{}) interface{}
+type freefunc func(freemap) interface{}
 
 type safeMap struct {
 	safe       freemap
@@ -102,7 +102,6 @@ func (m *safeMap) Insert(key, value interface{}) bool {
 func (m *safeMap) Find(key interface{}) interface{} {
 	newJob := job{find, key, "", make(chan returnData), nil}
 	m.jobchannel <- &newJob
-
 	return (<-newJob.return_channel).value
 }
 
@@ -115,12 +114,29 @@ func (m *safeMap) Delete(key interface{}) bool {
 	return (<-newJob.return_channel).success
 }
 
-func (m *safeMap) Finish(key interface{}) bool {
-	newJob := job{finish, key, "", make(chan returnData), nil}
+// Finish closes the async task queue and returns the underlying
+// so that it can be used as a regular map.
+//
+// Example:
+//   ok, m :=  m.Finish()
+//   if !ok {
+//       panic("The unthinkable happened!")
+//   }
+//   m[key] = val
+func (m *safeMap) Finish() (bool, freemap) {
+	newJob := job{finish, "", "", make(chan returnData), nil}
 	m.jobchannel <- &newJob
-	return (<-newJob.return_channel).success
+	return (<-newJob.return_channel).success, m.safe
 }
 
+// Do passes along a function which receives a reference to the
+// underlying map. Now, this means that it is possible to do
+// some unsafe things with the map. But this docstring should
+// serve as a warning that you shouldn't do unsafe things unless
+// you want to have things break.
+//
+// Example:
+//    m.Do(func (m freefunc) {// code})
 func (m *safeMap) Do(fn freefunc) (interface{}, bool) {
 	newJob := job{do, "", "", make(chan returnData), fn}
 	m.jobchannel <- &newJob
