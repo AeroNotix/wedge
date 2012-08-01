@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"sort"
 )
 
 const (
@@ -77,16 +78,22 @@ func (App *appServer) EnableStatTracking() {
 
 	staturl := makeurl("^/statistics/?$", "Statistics", func(req *http.Request) (string, int) {
 
-		rawdata, ok := App.stat_map.Do(func(m freefunc) {
+		rawdata, ok := App.stat_map.Do( func (m freemap) interface{} {
 			// we could return m here but that would mean we've broken the
 			// reason why we made the map safe in the first place.
-
-			outstr := "<table>"
-			for key, value := range m {
-				outstr += fmt.Sprintf("<tr><td>%s</td>", key.(string))
-				outstr += fmt.Sprintf("<td>%d</td></tr>", value.(int))
+			outstr := `<!DOCTYPE html><html><table border="2">`
+			outstr += `<tr><th>URL</th><th>Hits</th></tr>`
+			var urllist []string
+			for key, _ := range m {
+				urllist = append(urllist, key.(string))
 			}
-			outstr += "</table>"
+			sort.Strings(urllist)
+			for _, key := range urllist {
+				outstr += fmt.Sprintf("<tr><td>%s</td>", key)
+				outstr += fmt.Sprintf("<td>%d</td></tr>", m[key].(int))
+			}
+			outstr += `</table>
+					   </html>`
 			return outstr
 		})
 
@@ -108,7 +115,7 @@ func (App *appServer) incrementStats(k string) {
 
 	// create a goroutine which sends a function literal to the async
 	// map which tries to increment the value under the k string.
-	go App.stat_map.Do(func(m freefunc) {
+	go App.stat_map.Do(func(m freemap) interface{} {
 		val, ok := m[k]
 		if ok {
 			val, ok := val.(int)
@@ -140,7 +147,7 @@ func (App *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if len(matches) > 0 {
 			log.Println("Request:", route.name, request)
 			if App.stat_map != nil {
-				App.incrementStats(route.name)
+				App.incrementStats(request)
 			}
 			resp, status := App.getResponse(route, req)
 
