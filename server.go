@@ -113,6 +113,9 @@ func (App *appServer) Handler404(fn view) {
 // sent to this handler, which checks the incoming request against
 // all the routes we have setup if it finds a match it will invoke
 // the handler which is attached to that match.
+//
+// If somehow the URL it finds has been created with a non-existant
+// handler type it will panic.
 func (App *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	request := req.URL.Path
 
@@ -120,9 +123,11 @@ func (App *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		matches := route.match.FindAllStringSubmatch(request, 1)
 		if len(matches) > 0 {
 			log.Println("Request:", route.name, request)
+
 			if App.stat_map != nil {
 				App.incrementStats(request)
 			}
+
 			resp, status := App.getResponse(route, req)
 
 			if status == 404 {
@@ -164,8 +169,12 @@ func (App *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 // handle404req checks if the 404 handler is a custom one and uses that, if not,
 // it uses the built-in NotFound function.
 func (App *appServer) handle404req(w http.ResponseWriter, req *http.Request) {
-	log.Println("404", req.URL.Path)
-	App.incrementStats("404")
+	log.Println("404 on path:", req.URL.Path)
+
+	if App.stat_map != nil {
+		App.incrementStats("404" + req.URL.Path)
+	}
+
 	w.WriteHeader(404)
 
 	if App.handler404 != nil {
@@ -197,6 +206,7 @@ func (App *appServer) getResponse(route *url, req *http.Request) (string, int) {
 
 	select {
 	case <-route.timeout:
+		// reset the timeout timer
 		go func(d time.Duration, ch chan bool) {
 			log.Println("Timed out")
 			f := time.After(d * TIMEOUT)
@@ -205,6 +215,7 @@ func (App *appServer) getResponse(route *url, req *http.Request) (string, int) {
 				ch <- true
 			}()
 		}(route.cache_duration, route.timeout)
+		// get the new response and cache it in the map
 		resp, err := route.handler(req)
 		if !App.cache_map.Insert(req.URL.Path, resp) {
 			panic("Inserting into cache_map failure!")
@@ -212,14 +223,30 @@ func (App *appServer) getResponse(route *url, req *http.Request) (string, int) {
 		return resp, err
 	default:
 		resp, ok := App.cache_map.Find(req.URL.Path).(string)
+		var status int
 		if !ok {
-			resp, _ = route.handler(req)
-
+			resp, status = route.handler(req)
 		}
-		if !App.cache_map.Insert(req.URL.Path, resp) {
-			panic("Inserting into cache_map failure!")
+		if status != 404 {
+			if !App.cache_map.Insert(req.URL.Path, resp) {
+				panic("Inserting into cache_map failure!")
+			}
 		}
-		return resp, http.StatusOK
+		return resp, status
 	}
 	panic("unreachable")
+}
+
+// Starts the server running on PORT `port` with the timeout duration
+func (App *appServer) Run() {
+	server := http.Server{
+		Addr:        ":" + App.port,
+		Handler:     App,
+		ReadTimeout: App.timeout * time.Second,
+	}
+	fmt.Printf("Serving on PORT: %s\n", App.port)
+	err := server.ListenAndServe()
+	if err != nil {
+		fmt.Println(err)
+	}
 }

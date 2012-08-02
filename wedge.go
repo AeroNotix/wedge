@@ -3,7 +3,6 @@
 package wedge
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -25,6 +24,7 @@ var (
 	TIMEOUT = time.Second
 )
 
+// Page handler type
 type handlertype int
 
 // Handler functions should match this signature
@@ -39,18 +39,4 @@ func BasicReplace(template string, replacement_map map[string]string) string {
 	}
 	replacer := strings.NewReplacer(replacements...)
 	return replacer.Replace(template)
-}
-
-// Starts the server running on PORT `port` with the timeout duration
-func (App *appServer) Run() {
-	server := http.Server{
-		Addr:        ":" + App.port,
-		Handler:     App,
-		ReadTimeout: App.timeout * time.Second,
-	}
-	fmt.Printf("Serving on PORT: %s\n", App.port)
-	err := server.ListenAndServe()
-	if err != nil {
-		fmt.Println(err)
-	}
 }
