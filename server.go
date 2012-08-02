@@ -169,14 +169,14 @@ func (App *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 // handle404req checks if the 404 handler is a custom one and uses that, if not,
 // it uses the built-in NotFound function.
 func (App *appServer) handle404req(w http.ResponseWriter, req *http.Request) {
-	log.Println("404 on path:", req.URL.Path)
 
+	log.Println("404 on path:", req.URL.Path)
 	if App.stat_map != nil {
 		App.incrementStats("404" + req.URL.Path)
 	}
+	if req.URL.Path == "/favicon.ico" { return }
 
 	w.WriteHeader(404)
-
 	if App.handler404 != nil {
 		resp, _ := App.handler404(req)
 		io.WriteString(w, resp)
