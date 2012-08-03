@@ -157,6 +157,9 @@ func (App *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				w.Header().Set("Content-Type", "image/x-icon")
 				io.WriteString(w, resp)
 				return
+			case REDIRECT:
+				http.Redirect(w, req, resp, status)
+				return
 			default:
 				panic("Unknown handler type!")
 			}

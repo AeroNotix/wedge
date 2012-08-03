@@ -135,6 +135,14 @@ func Favicon(path string) *url {
 		}, ICON, -1)
 }
 
+// Redirect is a simple method of allowing paths to be redirected to other URLs.
+func Redirect(path, to string, code int) *url {
+	return makeurl(path, fmt.Sprintf("Redirecting %s => %s", path, to),
+		func(req *http.Request) (string, int) {
+			return to, code
+		}, REDIRECT, 0)
+}
+
 // Helper method which reads a file into memory or returns an error
 //
 // Used in both Favicon and StaticFiles

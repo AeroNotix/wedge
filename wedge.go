@@ -13,6 +13,7 @@ const (
 	JSON
 	STATIC
 	ICON
+	REDIRECT
 )
 
 const (
