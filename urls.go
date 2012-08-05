@@ -87,7 +87,7 @@ func URL(re, name string, v view, t handlertype) *url {
 // We start off receiving an 'as' string which marks the URL to which
 // we match against. We then take a []string which is filepaths to all
 // the locations in which an incoming file request should be checked
-// against. The file is read in chunks as per the module level constant4
+// against. The file is read in chunks as per the module level constant
 // FileChunk.
 //
 // This function will return a file in a string format ready to be sent
@@ -141,31 +141,4 @@ func Redirect(path, to string, code int) *url {
 		func(req *http.Request) (string, int) {
 			return to, code
 		}, REDIRECT, 0)
-}
-
-// Helper method which reads a file into memory or returns an error
-//
-// Used in both Favicon and StaticFiles
-func readFile(path string) (string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	// there is only one return but doing it this way means that
-	// further additions won't forget to close the fh
-	defer file.Close()
-
-	// if we're here, the file exists and we just need to send
-	// it to the client.
-	b := []string{}
-	for {
-		reader := make([]byte, FileChunks)
-		count, err := file.Read(reader)
-		if err != nil {
-			return strings.Join(b, ""), nil
-		}
-
-		b = append(b, string(reader[:count]))
-	}
-	panic("Unreachable!")
 }

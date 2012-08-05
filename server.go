@@ -21,6 +21,7 @@ type AppServer struct {
 	timeout    time.Duration
 	cache_map  *safeMap
 	handler404 view
+	handler500 view
 	stat_map   *safeMap
 }
 
@@ -122,6 +123,10 @@ func (App *AppServer) Handler404(fn view) {
 	App.handler404 = fn
 }
 
+func (App *AppServer) Handler500(fn view) {
+	App.handler500 = fn
+}
+
 // This is the main 'event loop' for the web server. All requests are
 // sent to this handler, which checks the incoming request against
 // all the routes we have setup if it finds a match it will invoke
@@ -142,39 +147,19 @@ func (App *AppServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 
 			resp, status := App.getResponse(route, req)
-
-			if status == 404 {
+			switch status {
+			case 404:
 				App.handle404req(w, req)
 				return
-			}
-
-			switch route.viewtype {
-			case HTML:
-				io.WriteString(w, resp)
+			case 500:
+				App.handle500req(w, req)
 				return
-			case JSON:
-				w.Header().Set("Content-type", "application/json")
-				json.NewEncoder(w).Encode(map[string]string{
-					"message": resp,
-				})
+			case 200:
+				App.handle200req(route, resp, w, req)
 				return
-			case STATIC:
-				if w.Header().Get("Content-Type") == "" {
-					reqstr := req.URL.Path[len(route.rawre):]
-					ctype := mime.TypeByExtension(filepath.Ext(reqstr))
-					w.Header().Set("Content-Type", ctype)
-				}
-				io.WriteString(w, resp)
-				return
-			case ICON:
-				w.Header().Set("Content-Type", "image/x-icon")
-				io.WriteString(w, resp)
-				return
-			case REDIRECT:
+			case 304:
 				http.Redirect(w, req, resp, status)
 				return
-			default:
-				panic("Unknown handler type!")
 			}
 		}
 	}
@@ -187,7 +172,7 @@ func (App *AppServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 func (App *AppServer) handle404req(w http.ResponseWriter, req *http.Request) {
 	log.Println("404 on path:", req.URL.Path)
 	if App.stat_map != nil {
-		App.incrementStats("404" + req.URL.Path)
+		App.incrementStats("404 => " + req.URL.Path)
 	}
 
 	if App.handler404 != nil {
@@ -199,6 +184,53 @@ func (App *AppServer) handle404req(w http.ResponseWriter, req *http.Request) {
 		http.NotFound(w, req)
 		return
 	}
+}
+
+func (App *AppServer) handle500req(w http.ResponseWriter, req *http.Request) {
+	log.Println("500 on path:", req.URL.Path)
+	if App.stat_map != nil {
+		App.incrementStats("500 => " + req.URL.Path)
+	}
+
+	if App.handler500 != nil {
+		w.WriteHeader(500)
+		resp, _ := App.handler500(req)
+		io.WriteString(w, resp)
+		return
+	} else {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+}
+
+func (App *AppServer) handle200req(route *url, resp string, w http.ResponseWriter, req *http.Request) {
+
+	switch route.viewtype {
+	case HTML:
+		io.WriteString(w, resp)
+		return
+	case JSON:
+		w.Header().Set("Content-type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": resp,
+		})
+		return
+	case STATIC:
+		if w.Header().Get("Content-Type") == "" {
+			reqstr := req.URL.Path[len(route.rawre):]
+			ctype := mime.TypeByExtension(filepath.Ext(reqstr))
+			w.Header().Set("Content-Type", ctype)
+		}
+		io.WriteString(w, resp)
+		return
+	case ICON:
+		w.Header().Set("Content-Type", "image/x-icon")
+		io.WriteString(w, resp)
+		return
+	default:
+		panic("Unknown handler type!")
+	}
+
 }
 
 // getResponse checks the *url's cache_duration, if the cache duration
@@ -220,24 +252,30 @@ func (App *AppServer) getResponse(route *url, req *http.Request) (string, int) {
 
 	select {
 	case <-route.timeout:
-		// reset the timeout timer
-		go func(d time.Duration, ch chan bool) {
-			log.Println("Timed out")
-			f := time.After(d * TIMEOUT)
-			<-f
-			go func() {
-				ch <- true
-			}()
-		}(route.cache_duration, route.timeout)
 		// get the new response and cache it in the map
 		resp, err := route.handler(req)
+		if err != 200 {
+			go func() {
+				route.timeout <- true
+			}()
+			return resp, err
+		}
 		if !App.cache_map.Insert(req.URL.Path, resp) {
 			panic("Inserting into cache_map failure!")
 		}
+		// reset the timeout timer
+		go func() {
+			log.Println("Timed out")
+			f := time.After(route.cache_duration * TIMEOUT)
+			<-f
+			go func() {
+				route.timeout <- true
+			}()
+		}()
 		return resp, err
 	default:
 		resp, ok := App.cache_map.Find(req.URL.Path).(string)
-		var status int
+		var status int = 200
 		if !ok {
 			resp, status = route.handler(req)
 		}
