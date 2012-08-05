@@ -12,9 +12,9 @@ import (
 	"time"
 )
 
-// appServer is our server instance which holds the ServeHTTP method
+// AppServer is our server instance which holds the ServeHTTP method
 // so that it satisfies the http.Server interface.
-type appServer struct {
+type AppServer struct {
 	port       string
 	routes     []*url
 	timeout    time.Duration
@@ -23,9 +23,9 @@ type appServer struct {
 	stat_map   *safeMap
 }
 
-// appServer constructor
-func NewAppServer(port string, timeout time.Duration) *appServer {
-	return &appServer{
+// AppServer constructor
+func NewAppServer(port string, timeout time.Duration) *AppServer {
+	return &AppServer{
 		port:      port,
 		routes:    make([]*url, 0),
 		timeout:   timeout,
@@ -33,8 +33,8 @@ func NewAppServer(port string, timeout time.Duration) *appServer {
 	}
 }
 
-// Attaches more *urls to the Routes slice on the appServer value
-func (App *appServer) AddURLs(patterns ...*url) {
+// Attaches more *urls to the Routes slice on the AppServer value
+func (App *AppServer) AddURLs(patterns ...*url) {
 	for _, url := range patterns {
 		App.routes = append(App.routes, url)
 	}
@@ -45,9 +45,9 @@ func (App *appServer) AddURLs(patterns ...*url) {
 // EnableStatTracking creates a NewSafeMap under the stat_map field which will
 // then be used to increment and aggregate hits to URLs.
 //
-// This function will append a new *url onto the associated appServer. The url
+// This function will append a new *url onto the associated AppServer. The url
 // which this is under is ^/statistics/?$.
-func (App *appServer) EnableStatTracking() {
+func (App *AppServer) EnableStatTracking() {
 	App.stat_map = NewSafeMap()
 
 	staturl := makeurl("^/statistics/?$", "Statistics", func(req *http.Request) (string, int) {
@@ -82,7 +82,7 @@ func (App *appServer) EnableStatTracking() {
 
 // incrementStats is a non-blocking method to increment a page counter
 // for individual routes.
-func (App *appServer) incrementStats(k string) {
+func (App *AppServer) incrementStats(k string) {
 	if App.stat_map == nil {
 		panic("Cannot increment statistics when it has not been enabled!")
 	}
@@ -104,8 +104,8 @@ func (App *appServer) incrementStats(k string) {
 	})
 }
 
-// Sets the 404 Handler for the appServer to fn.
-func (App *appServer) Handler404(fn view) {
+// Sets the 404 Handler for the AppServer to fn.
+func (App *AppServer) Handler404(fn view) {
 	App.handler404 = fn
 }
 
@@ -116,7 +116,7 @@ func (App *appServer) Handler404(fn view) {
 //
 // If somehow the URL it finds has been created with a non-existant
 // handler type it will panic.
-func (App *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func (App *AppServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	request := req.URL.Path
 
 	for _, route := range App.routes {
@@ -171,7 +171,7 @@ func (App *appServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 // handle404req checks if the 404 handler is a custom one and uses that, if not,
 // it uses the built-in NotFound function.
-func (App *appServer) handle404req(w http.ResponseWriter, req *http.Request) {
+func (App *AppServer) handle404req(w http.ResponseWriter, req *http.Request) {
 	log.Println("404 on path:", req.URL.Path)
 	if App.stat_map != nil {
 		App.incrementStats("404" + req.URL.Path)
@@ -199,7 +199,7 @@ func (App *appServer) handle404req(w http.ResponseWriter, req *http.Request) {
 // implementations of a safe map included with this library. One is sync'd
 // with channels (safeMap) and the other is sync'd with a mutex lock
 // (lockMap). We currently use the safeMap.
-func (App *appServer) getResponse(route *url, req *http.Request) (string, int) {
+func (App *AppServer) getResponse(route *url, req *http.Request) (string, int) {
 
 	if route.cache_duration == 0 {
 		return route.handler(req)
@@ -239,7 +239,7 @@ func (App *appServer) getResponse(route *url, req *http.Request) (string, int) {
 }
 
 // Starts the server running on PORT `port` with the timeout duration
-func (App *appServer) Run() {
+func (App *AppServer) Run() {
 	server := http.Server{
 		Addr:        ":" + App.port,
 		Handler:     App,
