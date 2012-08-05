@@ -1,6 +1,7 @@
 package wedge
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -49,28 +50,40 @@ func (App *AppServer) AddURLs(patterns ...*url) {
 // which this is under is ^/statistics/?$.
 func (App *AppServer) EnableStatTracking() {
 	App.stat_map = NewSafeMap()
-
+	now := time.Now().String()
 	staturl := makeurl("^/statistics/?$", "Statistics", func(req *http.Request) (string, int) {
-
 		rawdata, ok := App.stat_map.Do(func(m freemap) interface{} {
-			// we could return m here but that would mean we've broken the
-			// reason why we made the map safe in the first place.
-			outstr := `<!DOCTYPE html><html><table border="2">`
-			outstr += `<tr><th>URL</th><th>Hits</th></tr>`
+			b := []byte{}
+			buf := bytes.NewBuffer(b)
+			buf.WriteString(
+				fmt.Sprintf(
+					`<!DOCTYPE html><html>
+					 <p>Tracking since %s</p>
+					 <table border="2">
+					 <tr><th>URL</th><th>
+					 Hits</th></tr>`, now),
+			)
 			var urllist []string
 			for key, _ := range m {
 				urllist = append(urllist, key.(string))
 			}
 			sort.Strings(urllist)
+			var total int
 			for _, key := range urllist {
-				outstr += fmt.Sprintf("<tr><td>%s</td>", key)
-				outstr += fmt.Sprintf("<td>%d</td></tr>", m[key].(int))
+				buf.WriteString(
+					fmt.Sprintf("<tr><td>%s</td>", key),
+				)
+				total += m[key].(int)
+				buf.WriteString(
+					fmt.Sprintf("<td>%d</td></tr>", m[key].(int)),
+				)
 			}
-			outstr += `</table>
-					   </html>`
-			return outstr
+			buf.WriteString(
+				fmt.Sprintf(`<tr><td>Total</td><td>%d</td></tr>`, total),
+			)
+			buf.WriteString(`</table></html>`)
+			return buf.String()
 		})
-
 		if !ok {
 			return "Failure getting data", 500
 		}
