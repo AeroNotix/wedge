@@ -176,8 +176,8 @@ func (App *AppServer) handle404req(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if App.handler404 != nil {
-		w.WriteHeader(404)
-		resp, _ := App.handler404(req)
+		resp, status := App.handler404(req)
+		w.WriteHeader(status)
 		io.WriteString(w, resp)
 		return
 	} else {
@@ -186,6 +186,9 @@ func (App *AppServer) handle404req(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+// handle500req checks if the 500 handler is a custom one and uses that, if not,
+// it uses the built-in Error function with an Internal Server Error
+// response.
 func (App *AppServer) handle500req(w http.ResponseWriter, req *http.Request) {
 	log.Println("500 on path:", req.URL.Path)
 	if App.stat_map != nil {
@@ -193,8 +196,8 @@ func (App *AppServer) handle500req(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if App.handler500 != nil {
-		w.WriteHeader(500)
-		resp, _ := App.handler500(req)
+		resp, status := App.handler500(req)
+		w.WriteHeader(status)
 		io.WriteString(w, resp)
 		return
 	} else {
@@ -203,6 +206,8 @@ func (App *AppServer) handle500req(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+// handle200req handles the regular 200 response by checking the response
+// type and then switching the response based on that.
 func (App *AppServer) handle200req(route *url, resp string, w http.ResponseWriter, req *http.Request) {
 
 	switch route.viewtype {
