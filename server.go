@@ -157,7 +157,7 @@ func (App *AppServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			case 200:
 				App.handle200req(route, resp, w, req)
 				return
-			case 304:
+			case 303:
 				http.Redirect(w, req, resp, status)
 				return
 			}
