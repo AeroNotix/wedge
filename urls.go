@@ -142,3 +142,11 @@ func Redirect(path, to string, code int) *url {
 			return to, code
 		}, REDIRECT, 0)
 }
+
+// Returns data as the robots.txt file
+func Robots(data string) *url {
+	return makeurl("^/robots.txt$", "Attack of the robots...robots.txt",
+		func(req *http.Request) (string, int) {
+			return data, http.StatusOK
+		}, HTML, -1)
+}
