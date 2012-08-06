@@ -15,11 +15,11 @@ Usage:
 .. code-block:: go
 
     // Main page
-    func Index(req *http.Request) (string, int) {
+    func Index(w http.ResponseWriter, req *http.Request) (string, int) {
         return "Hello world!", http.StatusOK
     }
 
-    func Page404(req *http.Request) (string, int) {
+    func Page404(w http.ResponseWriter, req *http.Request) (string, int) {
     	return "An oopsie!", http.StatusNotFound
     }
 
