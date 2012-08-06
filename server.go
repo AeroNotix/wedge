@@ -155,7 +155,7 @@ func (App *AppServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				App.handle500req(w, req)
 				return
 			case 200:
-				App.handle200req(route, resp, w, req)
+				App.handle200req(w, req, resp, route)
 				return
 			case 303:
 				http.Redirect(w, req, resp, status)
@@ -208,7 +208,7 @@ func (App *AppServer) handle500req(w http.ResponseWriter, req *http.Request) {
 
 // handle200req handles the regular 200 response by checking the response
 // type and then switching the response based on that.
-func (App *AppServer) handle200req(route *url, resp string, w http.ResponseWriter, req *http.Request) {
+func (App *AppServer) handle200req(w http.ResponseWriter, req *http.Request, resp string, route *url) {
 
 	switch route.viewtype {
 	case HTML:
