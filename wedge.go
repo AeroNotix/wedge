@@ -1,5 +1,6 @@
-// Package wedge is a lightweight web framework which intends to
-// cut-down on oft written boilerplate code
+// Package wedge is a package to help cut-down on the oft-written boilerplate code with
+// net/http. It is not intended as a framework or a replacement for things like net/http
+// or Gorilla. It's a simple module for doing simple things.
 package wedge
 
 import (
@@ -30,7 +31,7 @@ var (
 type handlertype int
 
 // Handler functions should match this signature
-type view func(*http.Request) (string, int)
+type view func(http.ResponseWriter, *http.Request) (string, int)
 
 // BasicReplace takes a string and a map[string]string which it uses
 // to replace any instances of a key by the value under it.

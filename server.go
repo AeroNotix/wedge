@@ -136,7 +136,7 @@ func (App *AppServer) Handler500(fn view) {
 // handler type it will panic.
 func (App *AppServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	request := req.URL.Path
-
+	w.Header().Set("Server", "Wedge/0.1")
 	for _, route := range App.routes {
 		matches := route.match.FindAllStringSubmatch(request, 1)
 		if len(matches) > 0 {
@@ -155,11 +155,15 @@ func (App *AppServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				App.handle500req(w, req)
 				return
 			case 200:
+				w.WriteHeader(http.StatusOK)
 				App.handle200req(w, req, resp, route)
 				return
 			case 303:
 				http.Redirect(w, req, resp, status)
 				return
+			case 304:
+				w.WriteHeader(http.StatusNotModified)
+				App.handle200req(w, req, resp, route)
 			}
 		}
 	}
@@ -201,7 +205,7 @@ func (App *AppServer) handle500req(w http.ResponseWriter, req *http.Request) {
 		io.WriteString(w, resp)
 		return
 	} else {
-		http.Error(w, "Internal Server Error", 500)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 }
@@ -259,7 +263,7 @@ func (App *AppServer) getResponse(route *url, req *http.Request) (string, int) {
 	case <-route.timeout:
 		// get the new response and cache it in the map
 		resp, err := route.handler(req)
-		if err != 200 {
+		if err != http.StatusOK {
 			go func() {
 				route.timeout <- true
 			}()
