@@ -127,21 +127,26 @@ func (r Radio) Name() string {
 
 type Check struct {
 	name    string
+	min_len int
 	choices map[string]bool
 }
 
-func CheckField(name string, choices []string) Field {
+func CheckField(name string, choices []string, min int) Field {
 	m := make(map[string]bool)
 	for _, choice := range choices {
 		m[choice] = true
 	}
-	return Check{name, m}
+	return Check{name, min, m}
 }
 
 func (c Check) Validate(key interface{}, req *http.Request) bool {
 
 	k, ok := key.([]string)
 	if !ok {
+		return false
+	}
+
+	if len(k) < c.min_len {
 		return false
 	}
 
