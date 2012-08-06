@@ -52,45 +52,46 @@ func (App *AppServer) AddURLs(patterns ...*url) {
 func (App *AppServer) EnableStatTracking() {
 	App.stat_map = NewSafeMap()
 	now := time.Now().String()
-	staturl := makeurl("^/statistics/?$", "Statistics", func(req *http.Request) (string, int) {
-		rawdata, ok := App.stat_map.Do(func(m freemap) interface{} {
-			b := []byte{}
-			buf := bytes.NewBuffer(b)
-			buf.WriteString(
-				fmt.Sprintf(
-					`<!DOCTYPE html><html>
+	staturl := makeurl("^/statistics/?$", "Statistics",
+		func(w http.ResponseWriter, req *http.Request) (string, int) {
+			rawdata, ok := App.stat_map.Do(func(m freemap) interface{} {
+				b := []byte{}
+				buf := bytes.NewBuffer(b)
+				buf.WriteString(
+					fmt.Sprintf(
+						`<!DOCTYPE html><html>
 					 <p>Tracking since %s</p>
 					 <table border="2">
 					 <tr><th>URL</th><th>
 					 Hits</th></tr>`, now),
-			)
-			var urllist []string
-			for key, _ := range m {
-				urllist = append(urllist, key.(string))
-			}
-			sort.Strings(urllist)
-			var total int
-			for _, key := range urllist {
-				buf.WriteString(
-					fmt.Sprintf("<tr><td>%s</td>", key),
 				)
-				total += m[key].(int)
+				var urllist []string
+				for key, _ := range m {
+					urllist = append(urllist, key.(string))
+				}
+				sort.Strings(urllist)
+				var total int
+				for _, key := range urllist {
+					buf.WriteString(
+						fmt.Sprintf("<tr><td>%s</td>", key),
+					)
+					total += m[key].(int)
+					buf.WriteString(
+						fmt.Sprintf("<td>%d</td></tr>", m[key].(int)),
+					)
+				}
 				buf.WriteString(
-					fmt.Sprintf("<td>%d</td></tr>", m[key].(int)),
+					fmt.Sprintf(`<tr><td>Total</td><td>%d</td></tr>`, total),
 				)
+				buf.WriteString(`</table></html>`)
+				return buf.String()
+			})
+			if !ok {
+				return "Failure getting data", 500
 			}
-			buf.WriteString(
-				fmt.Sprintf(`<tr><td>Total</td><td>%d</td></tr>`, total),
-			)
-			buf.WriteString(`</table></html>`)
-			return buf.String()
-		})
-		if !ok {
-			return "Failure getting data", 500
-		}
-		return rawdata.(string), 200
+			return rawdata.(string), 200
 
-	}, HTML, 0)
+		}, HTML, 0)
 	App.routes = append(App.routes, staturl)
 }
 
@@ -136,7 +137,8 @@ func (App *AppServer) Handler500(fn view) {
 // handler type it will panic.
 func (App *AppServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	request := req.URL.Path
-	w.Header().Set("Server", "Wedge/0.1")
+	w.Header().Set("Server", "Wedge")
+
 	for _, route := range App.routes {
 		matches := route.match.FindAllStringSubmatch(request, 1)
 		if len(matches) > 0 {
@@ -146,7 +148,8 @@ func (App *AppServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				App.incrementStats(request)
 			}
 
-			resp, status := App.getResponse(route, req)
+			resp, status := App.getResponse(w, req, route)
+
 			switch status {
 			case 404:
 				App.handle404req(w, req)
@@ -155,15 +158,11 @@ func (App *AppServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				App.handle500req(w, req)
 				return
 			case 200:
-				w.WriteHeader(http.StatusOK)
 				App.handle200req(w, req, resp, route)
 				return
 			case 303:
 				http.Redirect(w, req, resp, status)
 				return
-			case 304:
-				w.WriteHeader(http.StatusNotModified)
-				App.handle200req(w, req, resp, route)
 			}
 		}
 	}
@@ -180,7 +179,7 @@ func (App *AppServer) handle404req(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if App.handler404 != nil {
-		resp, status := App.handler404(req)
+		resp, status := App.handler404(w, req)
 		w.WriteHeader(status)
 		io.WriteString(w, resp)
 		return
@@ -200,7 +199,7 @@ func (App *AppServer) handle500req(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if App.handler500 != nil {
-		resp, status := App.handler500(req)
+		resp, status := App.handler500(w, req)
 		w.WriteHeader(status)
 		io.WriteString(w, resp)
 		return
@@ -225,11 +224,9 @@ func (App *AppServer) handle200req(w http.ResponseWriter, req *http.Request, res
 		})
 		return
 	case STATIC:
-		if w.Header().Get("Content-Type") == "" {
-			reqstr := req.URL.Path[len(route.rawre):]
-			ctype := mime.TypeByExtension(filepath.Ext(reqstr))
-			w.Header().Set("Content-Type", ctype)
-		}
+		reqstr := req.URL.Path[len(route.rawre):]
+		ctype := mime.TypeByExtension(filepath.Ext(reqstr))
+		w.Header().Set("Content-Type", ctype)
 		io.WriteString(w, resp)
 		return
 	case ICON:
@@ -253,16 +250,16 @@ func (App *AppServer) handle200req(w http.ResponseWriter, req *http.Request, res
 // implementations of a safe map included with this library. One is sync'd
 // with channels (safeMap) and the other is sync'd with a mutex lock
 // (lockMap). We currently use the safeMap.
-func (App *AppServer) getResponse(route *url, req *http.Request) (string, int) {
+func (App *AppServer) getResponse(w http.ResponseWriter, req *http.Request, route *url) (string, int) {
 
 	if route.cache_duration == 0 {
-		return route.handler(req)
+		return route.handler(w, req)
 	}
 
 	select {
 	case <-route.timeout:
 		// get the new response and cache it in the map
-		resp, err := route.handler(req)
+		resp, err := route.handler(w, req)
 		if err != http.StatusOK {
 			go func() {
 				route.timeout <- true
@@ -286,7 +283,7 @@ func (App *AppServer) getResponse(route *url, req *http.Request) (string, int) {
 		resp, ok := App.cache_map.Find(req.URL.Path).(string)
 		var status int = 200
 		if !ok {
-			resp, status = route.handler(req)
+			resp, status = route.handler(w, req)
 		}
 		if status != 404 {
 			if !App.cache_map.Insert(req.URL.Path, resp) {

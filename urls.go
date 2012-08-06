@@ -93,7 +93,7 @@ func URL(re, name string, v view, t handlertype) *url {
 // This function will return a file in a string format ready to be sent
 // across the wire.
 func StaticFiles(as string, paths ...string) *url {
-	return makeurl(as, "Static File", func(req *http.Request) (string, int) {
+	return makeurl(as, "Static File", func(w http.ResponseWriter, req *http.Request) (string, int) {
 		filename := req.URL.Path[len(as):]
 		for _, path := range paths {
 			// Prevent Directory Traversal Attacks
@@ -126,7 +126,7 @@ func Favicon(path string) *url {
 	file.Close()
 
 	return makeurl("^/favicon.ico$", "Favicon",
-		func(req *http.Request) (string, int) {
+		func(w http.ResponseWriter, req *http.Request) (string, int) {
 			out_data, err := readFile(path)
 			if err != nil {
 				return "", http.StatusNotFound
@@ -138,7 +138,7 @@ func Favicon(path string) *url {
 // Redirect is a simple method of allowing paths to be redirected to other URLs.
 func Redirect(path, to string, code int) *url {
 	return makeurl(path, fmt.Sprintf("Redirecting %s => %s", path, to),
-		func(req *http.Request) (string, int) {
+		func(w http.ResponseWriter, req *http.Request) (string, int) {
 			return to, code
 		}, REDIRECT, 0)
 }
@@ -146,7 +146,7 @@ func Redirect(path, to string, code int) *url {
 // Returns data as the robots.txt file
 func Robots(data string) *url {
 	return makeurl("^/robots.txt$", "Attack of the robots...robots.txt",
-		func(req *http.Request) (string, int) {
+		func(w http.ResponseWriter, req *http.Request) (string, int) {
 			return data, http.StatusOK
 		}, HTML, -1)
 }
