@@ -1,3 +1,6 @@
+// Package wedge is a package to help cut-down on the oft-written boilerplate code with
+// net/http. It is not intended as a framework or a replacement for things like net/http
+// or Gorilla. It's a simple module for doing simple things.
 package wedge
 
 import (
