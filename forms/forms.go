@@ -365,6 +365,10 @@ func (c Combo) Display() string {
 	return buf.String()
 }
 
+// writeMultipleOptions is a helper method which is used for Fields which have
+// a very similar internal datastructure and a very similar output format.
+//
+// It's useful for things which vary very little in their HTML representation.
 func writeMultipleOptions(object Field, choices []choice_options, ftype string) string {
 	buf := bytes.NewBufferString("")
 	for _, choice := range choices {
@@ -377,6 +381,9 @@ func writeMultipleOptions(object Field, choices []choice_options, ftype string) 
 	return buf.String()
 }
 
+// initMultipleOptions is a helper method which is used for Fields which have
+// a very similar internal datastructure so they can be initilized in the same
+// way.
 func initMultipleOptions(choices []choice_options) (map[string]string) {
 	m := make(map[string]string)
 	for _, choice := range choices {
