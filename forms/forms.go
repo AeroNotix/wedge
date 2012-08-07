@@ -26,6 +26,7 @@ func NewFormMetadata(name, action, method string, submit bool) FormMetadata {
 	}
 }
 
+// Field represents what each Form Field should be able to do.
 type Field interface {
 	Validate(interface{}, *http.Request) bool       // Tells us whether the form is valid
 	Name() string                                   // Returns a name for the field
