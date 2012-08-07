@@ -150,14 +150,17 @@ func (t Text) Display() string {
 type Radio struct {
 	name    string
 	choices map[string]string
+	choices_slice []choice_options
 }
 
 func RadioField(name string, choices ...choice_options) Field {
 	m := make(map[string]string)
+	ms := []choice_options{}
 	for _, choice := range choices {
 		m[choice.name] = choice.choice
+		ms = append(ms, choice)
 	}
-	return Radio{name, m}
+	return Radio{name, m, ms}
 }
 
 func (r Radio) Validate(key interface{}, req *http.Request) bool {
@@ -170,7 +173,6 @@ func (r Radio) Validate(key interface{}, req *http.Request) bool {
 		return true
 	}
 	log.Println("Error validating Radio value: Entry not in map.")
-	log.Println(r.choices, k)
 	return false
 }
 
@@ -189,10 +191,10 @@ func (r Radio) Name() string {
 
 func (r Radio) Display() string {
 	buf := bytes.NewBufferString("")
-	for short_name, long_name := range r.choices {
+	for _, choice := range r.choices_slice {
 		buf.WriteString(
-			fmt.Sprintf(`%s: <input type="radio" name="%s" value="%s" />`,
-				long_name, r.name, short_name,
+			fmt.Sprintf(`%s: <input type="radio" name="%s" value="%s" %s />`,
+			choice.choice, r.name, choice.name, choice.checked,
 			),
 		)
 	}
@@ -203,6 +205,7 @@ type Check struct {
 	name    string
 	min_len int
 	choices map[string]string
+	choices_slice []choice_options
 }
 
 type choice_options struct {
@@ -222,10 +225,12 @@ func Choice(choice, name string, checked bool) choice_options {
 
 func CheckField(name string, min int, choices ...choice_options) Field {
 	m := make(map[string]string)
+	ms := []choice_options{}
 	for _, choice := range choices {
 		m[choice.name] = choice.choice
+		ms = append(ms, choice)
 	}
-	return Check{name, min, m}
+	return Check{name, min, m, ms}
 }
 
 func (c Check) Validate(key interface{}, req *http.Request) bool {
@@ -266,10 +271,10 @@ func (c Check) Name() string {
 
 func (c Check) Display() string {
 	buf := bytes.NewBufferString("")
-	for short_name, long_name := range c.choices {
+	for _, choice := range c.choices_slice {
 		buf.WriteString(
-			fmt.Sprintf(`%s: <input type="checkbox" name="%s" value="%s" />`,
-				long_name, c.name, short_name,
+			fmt.Sprintf(`%s: <input type="checkbox" name="%s" value="%s" %s />`,
+			choice.choice, c.name, choice.name, choice.checked,
 			),
 		)
 	}
