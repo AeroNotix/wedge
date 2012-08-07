@@ -9,10 +9,10 @@ The Field interface as as follows:
   .. code-block:: go
 
       type Field interface {
-      	  Validate(interface{}, *http.Request) bool
-	      Name() string
-          Convert(interface{}, *http.Request) interface{}
-          Display() string
+           Validate(interface{}, *http.Request) bool
+	       Name() string
+           Convert(interface{}, *http.Request) interface{}
+           Display() string
       }
 
 A types Validate method must return a boolean value indicating whether it's associated
