@@ -52,7 +52,7 @@ An example application which uses wedge/forms can be found below:
         forms.TextField("user", "Username", 10),
         forms.CheckField("vehicle", 1,
             forms.Choice("I have a Bike", "Bike", false),
-            forms.Choice("I have a Car", "Car", true), // TODO: use these check values
+            forms.Choice("I have a Car", "Car", true),
         ),
         forms.RadioField("vehicle2",
             forms.Choice("I have a Bike", "Bike", false),
