@@ -102,14 +102,14 @@ func (f Form) Convert(req *http.Request) map[string]interface{} {
 	return outform
 }
 
+// NewForm creates an instance of a *Form and returns a pointer to it.
 func NewForm(md FormMetadata, forms ...Field) *Form {
 	newForm := Form{
 		md:         md,
 		fields:     make(map[string]Field),
-		fieldslice: []Field{},
+		fieldslice: forms,
 	}
 	for _, f := range forms {
-		newForm.fieldslice = append(newForm.fieldslice, f)
 		newForm.fields[f.Name()] = f
 	}
 
