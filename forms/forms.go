@@ -14,6 +14,9 @@ type FormMetadata struct {
 	submit bool
 }
 
+// NewFormMetadata encapsulates the data which needs to be passed to the Form
+// constructor. We make it here in case many forms need to share Metadata, so
+// it becomes possible to share vvalues of FormMetadata with multiple Forms.
 func NewFormMetadata(name, action, method string, submit bool) FormMetadata {
 	return FormMetadata{
 		name:   name,
@@ -153,6 +156,8 @@ type Radio struct {
 	choices_slice []choice_options
 }
 
+// RadioField creates a Radio value which will have it's fields properly initialized
+// with the choices which are passed to it.
 func RadioField(name string, choices ...choice_options) Field {
 	m := make(map[string]string)
 	ms := []choice_options{}
