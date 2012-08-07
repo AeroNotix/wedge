@@ -148,8 +148,8 @@ func (t Text) Display() string {
 }
 
 type Radio struct {
-	name    string
-	choices map[string]string
+	name          string
+	choices       map[string]string
 	choices_slice []choice_options
 }
 
@@ -194,7 +194,7 @@ func (r Radio) Display() string {
 	for _, choice := range r.choices_slice {
 		buf.WriteString(
 			fmt.Sprintf(`%s: <input type="radio" name="%s" value="%s" %s />`,
-			choice.choice, r.name, choice.name, choice.checked,
+				choice.choice, r.name, choice.name, choice.checked,
 			),
 		)
 	}
@@ -202,9 +202,9 @@ func (r Radio) Display() string {
 }
 
 type Check struct {
-	name    string
-	min_len int
-	choices map[string]string
+	name          string
+	min_len       int
+	choices       map[string]string
 	choices_slice []choice_options
 }
 
@@ -274,7 +274,7 @@ func (c Check) Display() string {
 	for _, choice := range c.choices_slice {
 		buf.WriteString(
 			fmt.Sprintf(`%s: <input type="checkbox" name="%s" value="%s" %s />`,
-			choice.choice, c.name, choice.name, choice.checked,
+				choice.choice, c.name, choice.name, choice.checked,
 			),
 		)
 	}
@@ -325,4 +325,62 @@ func (p Password) Name() string {
 
 func (p Password) Display() string {
 	return fmt.Sprintf(`%s: <input type="password" name="%s" />`, p.long_name, p.name)
+}
+
+type Combo struct {
+	name          string
+	long_name     string
+	choices       map[string]string
+	choices_slice []choice_options
+}
+
+func ComboField(name, long_name string, choices ...choice_options) Field {
+	m := make(map[string]string)
+	ms := []choice_options{}
+
+	for _, choice := range choices {
+		m[choice.name] = choice.choice
+		ms = append(ms, choice)
+	}
+
+	return Combo{name, long_name, m, ms}
+}
+
+func (c Combo) Validate(key interface{}, req *http.Request) bool {
+	k, ok := key.([]string)
+	if !ok {
+		log.Println("Error validating Combo: assert")
+	}
+	if _, ok := c.choices[k[0]]; ok {
+		return true
+	}
+	return false
+}
+
+func (c Combo) Convert(key interface{}, req *http.Request) interface{} {
+	k, ok := key.([]string)
+	if !ok {
+		log.Println("Error converting Combo: assert")
+	}
+	return k[0]
+}
+
+func (c Combo) Name() string {
+	return c.name
+}
+
+func (c Combo) Display() string {
+	buf := bytes.NewBufferString("")
+	buf.WriteString(
+		fmt.Sprintf(`%s: <select name="%s">`, c.long_name, c.name),
+	)
+	for _, choice := range c.choices_slice {
+		buf.WriteString(
+			Fmt.Sprintf(`<option value="%s">%s</option>`,
+				choice.name, choice.choice,
+			),
+		)
+	}
+	buf.WriteString(`</select>`)
+	return buf.String()
 }
