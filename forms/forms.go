@@ -49,6 +49,10 @@ func (f Form) Display() string {
 
 	for _, field := range f.fieldslice {
 		buf.WriteString(field.Display())
+		buf.WriteString(`<br/>`)
+	}
+	if f.md.submit {
+		buf.WriteString(`<input type="submit" value="Submit">`)
 	}
 	buf.WriteString(`</form>`)
 	return buf.String()
@@ -64,9 +68,11 @@ func (f Form) Validate(req *http.Request) bool {
 	inputForm := req.Form
 	for key, value := range f.fields {
 		if _, ok := inputForm[key]; !ok {
+			log.Println("Key not in inputForm:", key)
 			return false
 		}
 		if !value.Validate(inputForm[key], req) {
+			log.Println("Failed to validate:", key)
 			return false
 		}
 	}
@@ -86,8 +92,9 @@ func (f Form) Convert(req *http.Request) map[string]interface{} {
 	return outform
 }
 
-func NewForm(name string, md FormMetadata, forms ...Field) *Form {
+func NewForm(md FormMetadata, forms ...Field) *Form {
 	newForm := Form{
+		md:         md,
 		fields:     make(map[string]Field),
 		fieldslice: []Field{},
 	}
@@ -100,12 +107,13 @@ func NewForm(name string, md FormMetadata, forms ...Field) *Form {
 }
 
 type Text struct {
-	name    string
-	max_len int
+	name      string
+	long_name string
+	max_len   int
 }
 
-func TextField(n string, l int) Field {
-	return Text{n, l}
+func TextField(name, long_name string, l int) Field {
+	return Text{name, long_name, l}
 }
 
 func (t Text) Validate(key interface{}, f *http.Request) bool {
@@ -114,10 +122,10 @@ func (t Text) Validate(key interface{}, f *http.Request) bool {
 		log.Println("Error validating Text value")
 		return false
 	}
-
-	if len(f.FormValue(k[0])) <= t.max_len {
+	if len(k[0]) < t.max_len {
 		return true
 	}
+	log.Println("TextField didn't validate")
 	return false
 }
 
@@ -135,25 +143,24 @@ func (t Text) Name() string {
 }
 
 func (t Text) Display() string {
-	return fmt.Sprintf(`<input type="text" name="%s" />`, t.name)
+	return fmt.Sprintf(`%s: <input type="text" name="%s" />`, t.long_name, t.name)
 }
 
 type Radio struct {
 	name    string
-	choices map[string]bool
+	choices map[string]string
 }
 
-func RadioField(name string, choices []string) Field {
-	m := make(map[string]bool)
+func RadioField(name string, choices ...choice_options) Field {
+	m := make(map[string]string)
 	for _, choice := range choices {
-		m[choice] = true
+		m[choice.name] = choice.choice
 	}
 	return Radio{name, m}
 }
 
 func (r Radio) Validate(key interface{}, req *http.Request) bool {
 	k, ok := key.([]string)
-
 	if !ok {
 		log.Println("Error validating Radio value")
 		return false
@@ -161,15 +168,18 @@ func (r Radio) Validate(key interface{}, req *http.Request) bool {
 	if _, ok := r.choices[k[0]]; ok {
 		return true
 	}
+	log.Println("Error validating Radio value: Entry not in map.")
+	log.Println(r.choices, k)
 	return false
 }
 
 func (r Radio) Convert(key interface{}, req *http.Request) interface{} {
-	k, ok := key.(string)
+	k, ok := key.([]string)
 	if !ok {
 		log.Println("Error converting Radio value")
+		return false
 	}
-	return k
+	return k[0]
 }
 
 func (r Radio) Name() string {
@@ -178,10 +188,10 @@ func (r Radio) Name() string {
 
 func (r Radio) Display() string {
 	buf := bytes.NewBufferString("")
-	for choice, _ := range r.choices {
+	for short_name, long_name := range r.choices {
 		buf.WriteString(
-			fmt.Sprintf(`<input type="radio" name="%s" value="%s" />`,
-				r.name, choice,
+			fmt.Sprintf(`%s: <input type="radio" name="%s" value="%s" />`,
+				long_name, r.name, short_name,
 			),
 		)
 	}
@@ -191,13 +201,28 @@ func (r Radio) Display() string {
 type Check struct {
 	name    string
 	min_len int
-	choices map[string]bool
+	choices map[string]string
 }
 
-func CheckField(name string, choices []string, min int) Field {
-	m := make(map[string]bool)
+type choice_options struct {
+	choice  string
+	name    string
+	checked string
+}
+
+func Choice(choice, name string, checked bool) choice_options {
+	checkstr := ""
+	if checked {
+		checkstr = `checked="checked"`
+	}
+
+	return choice_options{choice, name, checkstr}
+}
+
+func CheckField(name string, min int, choices ...choice_options) Field {
+	m := make(map[string]string)
 	for _, choice := range choices {
-		m[choice] = true
+		m[choice.name] = choice.choice
 	}
 	return Check{name, min, m}
 }
@@ -206,18 +231,22 @@ func (c Check) Validate(key interface{}, req *http.Request) bool {
 
 	k, ok := key.([]string)
 	if !ok {
+		log.Println("CheckField didn't validate: Assert")
 		return false
 	}
 
 	if len(k) < c.min_len {
+		log.Println("CheckField didn't validate: Length")
 		return false
 	}
 
 	for _, value := range k {
 		if _, ok := c.choices[value]; !ok {
+			log.Println("CheckField didn't validate: Value not in map.")
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -236,12 +265,58 @@ func (c Check) Name() string {
 
 func (c Check) Display() string {
 	buf := bytes.NewBufferString("")
-	for choice, _ := range c.choices {
+	for short_name, long_name := range c.choices {
 		buf.WriteString(
-			fmt.Sprintf(`<input type="checkbox" name="%s" value="%s" />`,
-				c.name, choice,
+			fmt.Sprintf(`%s: <input type="checkbox" name="%s" value="%s" />`,
+				long_name, c.name, short_name,
 			),
 		)
 	}
 	return buf.String()
+}
+
+type Password struct {
+	name      string
+	long_name string
+	min       int
+	max       int
+}
+
+func PasswordField(name, long_name string, min, max int) Password {
+	return Password{
+		name:      name,
+		long_name: long_name,
+		min:       min,
+		max:       max,
+	}
+}
+
+func (p Password) Validate(key interface{}, req *http.Request) bool {
+	val, ok := key.([]string)
+	if !ok {
+		log.Println("Error validating Password value")
+		return false
+	}
+	if (len(val[0]) >= p.min) && (len(val[0]) <= p.max) {
+		return true
+	}
+	log.Println("Failure to validate Password: Length")
+	return false
+}
+
+func (p Password) Convert(key interface{}, req *http.Request) interface{} {
+	val, ok := key.([]string)
+	if !ok {
+		log.Println("Error converting Password value")
+		return false
+	}
+	return val[0]
+}
+
+func (p Password) Name() string {
+	return p.name
+}
+
+func (p Password) Display() string {
+	return fmt.Sprintf(`%s: <input type="password" name="%s" />`, p.long_name, p.name)
 }
