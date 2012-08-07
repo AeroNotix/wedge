@@ -124,6 +124,7 @@ func (App *AppServer) Handler404(fn view) {
 	App.handler404 = fn
 }
 
+// Sets the 500 Handler for the AppServer to fn.
 func (App *AppServer) Handler500(fn view) {
 	App.handler500 = fn
 }
@@ -212,7 +213,6 @@ func (App *AppServer) handle500req(w http.ResponseWriter, req *http.Request) {
 // handle200req handles the regular 200 response by checking the response
 // type and then switching the response based on that.
 func (App *AppServer) handle200req(w http.ResponseWriter, req *http.Request, resp string, route *url) {
-
 	switch route.viewtype {
 	case HTML:
 		io.WriteString(w, resp)
@@ -236,7 +236,6 @@ func (App *AppServer) handle200req(w http.ResponseWriter, req *http.Request, res
 	default:
 		panic("Unknown handler type!")
 	}
-
 }
 
 // getResponse checks the *url's cache_duration, if the cache duration
