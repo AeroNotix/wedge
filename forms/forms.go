@@ -193,7 +193,7 @@ func (r Radio) Display() string {
 	buf := bytes.NewBufferString("")
 	for _, choice := range r.choices_slice {
 		buf.WriteString(
-			fmt.Sprintf(`%s: <input type="radio" name="%s" value="%s" %s />`,
+			fmt.Sprintf(`%s: <input type="radio" name="%s" value="%s" %s /><br />`,
 				choice.choice, r.name, choice.name, choice.checked,
 			),
 		)
@@ -376,7 +376,7 @@ func (c Combo) Display() string {
 	)
 	for _, choice := range c.choices_slice {
 		buf.WriteString(
-			Fmt.Sprintf(`<option value="%s">%s</option>`,
+			fmt.Sprintf(`<option value="%s">%s</option>`,
 				choice.name, choice.choice,
 			),
 		)
