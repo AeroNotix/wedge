@@ -40,6 +40,12 @@ type Form struct {
 	req        *http.Request
 }
 
+// Fields allows you to iterate through the fields and have a custom order, or specialized
+// output versus using the Display method.
+func (f Form) Fields() []Field {
+	return f.fieldslice
+}
+
 // Display iterates through all the Fields and calls their Display method
 // adding their return values to a buffer and flushing that to the caller.
 func (f Form) Display() string {
