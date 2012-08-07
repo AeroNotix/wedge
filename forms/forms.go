@@ -159,13 +159,8 @@ type Radio struct {
 // RadioField creates a Radio value which will have it's fields properly initialized
 // with the choices which are passed to it.
 func RadioField(name string, choices ...choice_options) Field {
-	m := make(map[string]string)
-	ms := []choice_options{}
-	for _, choice := range choices {
-		m[choice.name] = choice.choice
-		ms = append(ms, choice)
-	}
-	return Radio{name, m, ms}
+	m := initMultipleOptions(choices)
+	return Radio{name, m, choices}
 }
 
 func (r Radio) Validate(key interface{}, req *http.Request) bool {
@@ -220,14 +215,11 @@ func Choice(choice, name string, checked bool) choice_options {
 	return choice_options{choice, name, checkstr}
 }
 
+// CheckField creates a Check value which will have it's fields properly initialized
+// with the choices which are passed to it.
 func CheckField(name string, min int, choices ...choice_options) Field {
-	m := make(map[string]string)
-	ms := []choice_options{}
-	for _, choice := range choices {
-		m[choice.name] = choice.choice
-		ms = append(ms, choice)
-	}
-	return Check{name, min, m, ms}
+	m := initMultipleOptions(choices)
+	return Check{name, min, m, choices}
 }
 
 func (c Check) Validate(key interface{}, req *http.Request) bool {
@@ -324,15 +316,8 @@ type Combo struct {
 }
 
 func ComboField(name, long_name string, choices ...choice_options) Field {
-	m := make(map[string]string)
-	ms := []choice_options{}
-
-	for _, choice := range choices {
-		m[choice.name] = choice.choice
-		ms = append(ms, choice)
-	}
-
-	return Combo{name, long_name, m, ms}
+	m := initMultipleOptions(choices)
+	return Combo{name, long_name, m, choices}
 }
 
 func (c Combo) Validate(key interface{}, req *http.Request) bool {
@@ -384,4 +369,12 @@ func writeMultipleOptions(object Field, choices []choice_options, ftype string) 
 		)
 	}
 	return buf.String()
+}
+
+func initMultipleOptions(choices []choice_options) (map[string]string) {
+	m := make(map[string]string)
+	for _, choice := range choices {
+		m[choice.name] = choice.choice
+	}
+	return m
 }
