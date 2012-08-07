@@ -1,21 +1,64 @@
 package forms
 
 import (
+	"bytes"
+	"fmt"
 	"log"
 	"net/http"
 )
 
+type FormMetadata struct {
+	name   string
+	action string
+	method string
+	submit bool
+}
+
+func NewFormMetadata(name, action, method string, submit bool) FormMetadata {
+	return FormMetadata{
+		name:   name,
+		action: action,
+		method: method,
+		submit: submit,
+	}
+}
+
 type Field interface {
-	Validate(interface{}, *http.Request) bool
-	Name() string
-	Convert(interface{}, *http.Request) interface{}
+	Validate(interface{}, *http.Request) bool       // Tells us whether the form is valid
+	Name() string                                   // Returns a name for the field
+	Convert(interface{}, *http.Request) interface{} // Converts the form data into Go objects
+	Display() string                                // Asks the field to display itself.
 }
 
 type Form struct {
-	fields map[string]Field
-	req    *http.Request
+	md         FormMetadata
+	fields     map[string]Field
+	fieldslice []Field
+	req        *http.Request
 }
 
+// Display iterates through all the Fields and calls their Display method
+// adding their return values to a buffer and flushing that to the caller.
+func (f Form) Display() string {
+	buf := bytes.NewBufferString("")
+	buf.WriteString(
+		fmt.Sprintf(`<form name="%s" action="%s" method="%s">`,
+			f.md.name, f.md.action, f.md.method,
+		),
+	)
+
+	for _, field := range f.fieldslice {
+		buf.WriteString(field.Display())
+	}
+	buf.WriteString(`</form>`)
+	return buf.String()
+}
+
+// Validate takes the incoming request object and checks if the form
+// included with it.
+//
+// Validate works on the Field interface. Considering that we will have
+// quite a lot of field types, which need to be grouped onto a Form.
 func (f Form) Validate(req *http.Request) bool {
 
 	inputForm := req.Form
@@ -32,6 +75,8 @@ func (f Form) Validate(req *http.Request) bool {
 	return true
 }
 
+// Form iterates through all the Fields on the Form and calls their
+// Convert method and assigns the result in a map.
 func (f Form) Convert(req *http.Request) map[string]interface{} {
 	inputForm := req.Form
 	outform := make(map[string]interface{})
@@ -41,11 +86,13 @@ func (f Form) Convert(req *http.Request) map[string]interface{} {
 	return outform
 }
 
-func NewForm(forms ...Field) *Form {
+func NewForm(name string, md FormMetadata, forms ...Field) *Form {
 	newForm := Form{
-		fields: make(map[string]Field),
+		fields:     make(map[string]Field),
+		fieldslice: []Field{},
 	}
 	for _, f := range forms {
+		newForm.fieldslice = append(newForm.fieldslice, f)
 		newForm.fields[f.Name()] = f
 	}
 
@@ -87,6 +134,10 @@ func (t Text) Name() string {
 	return t.name
 }
 
+func (t Text) Display() string {
+	return fmt.Sprintf(`<input type="text" name="%s" />`, t.name)
+}
+
 type Radio struct {
 	name    string
 	choices map[string]bool
@@ -123,6 +174,18 @@ func (r Radio) Convert(key interface{}, req *http.Request) interface{} {
 
 func (r Radio) Name() string {
 	return r.name
+}
+
+func (r Radio) Display() string {
+	buf := bytes.NewBufferString("")
+	for choice, _ := range r.choices {
+		buf.WriteString(
+			fmt.Sprintf(`<input type="radio" name="%s" value="%s" />`,
+				r.name, choice,
+			),
+		)
+	}
+	return buf.String()
 }
 
 type Check struct {
@@ -169,4 +232,16 @@ func (c Check) Convert(key interface{}, req *http.Request) interface{} {
 
 func (c Check) Name() string {
 	return c.name
+}
+
+func (c Check) Display() string {
+	buf := bytes.NewBufferString("")
+	for choice, _ := range c.choices {
+		buf.WriteString(
+			fmt.Sprintf(`<input type="checkbox" name="%s" value="%s" />`,
+				c.name, choice,
+			),
+		)
+	}
+	return buf.String()
 }
