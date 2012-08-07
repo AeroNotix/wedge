@@ -190,15 +190,7 @@ func (r Radio) Name() string {
 }
 
 func (r Radio) Display() string {
-	buf := bytes.NewBufferString("")
-	for _, choice := range r.choices_slice {
-		buf.WriteString(
-			fmt.Sprintf(`%s: <input type="radio" name="%s" value="%s" %s /><br />`,
-				choice.choice, r.name, choice.name, choice.checked,
-			),
-		)
-	}
-	return buf.String()
+	return writeMultipleOptions(r, r.choices_slice, "radio")
 }
 
 type Check struct {
@@ -270,15 +262,7 @@ func (c Check) Name() string {
 }
 
 func (c Check) Display() string {
-	buf := bytes.NewBufferString("")
-	for _, choice := range c.choices_slice {
-		buf.WriteString(
-			fmt.Sprintf(`%s: <input type="checkbox" name="%s" value="%s" %s />`,
-				choice.choice, c.name, choice.name, choice.checked,
-			),
-		)
-	}
-	return buf.String()
+	return writeMultipleOptions(c, c.choices_slice, "checkbox")
 }
 
 type Password struct {
@@ -382,5 +366,17 @@ func (c Combo) Display() string {
 		)
 	}
 	buf.WriteString(`</select>`)
+	return buf.String()
+}
+
+func writeMultipleOptions(object Field, choices []choice_options, ftype string) string {
+	buf := bytes.NewBufferString("")
+	for _, choice := range choices {
+		buf.WriteString(
+			fmt.Sprintf(`%s: <input type="%s" name="%s" value="%s" %s /><br />`,
+			choice.choice, ftype, object.Name(), choice.name, choice.checked,
+			),
+		)
+	}
 	return buf.String()
 }
