@@ -10,6 +10,16 @@ You want to have a multi-tiered RPC cluster with flash failover support and othe
 standard library and write it yourself, Wedge would not be a good fit.
 
 
+Features:
+
+* Easily set up functions to hang off URLs.
+* Static files retrieval on any URL, cached.
+* Cache URLs permanently or for a specified time.
+* Form processing.
+* Custom 404/500 handlers.
+* Statistics tracking.
+* Not much else.
+
 Usage:
 
 .. code-block:: go
