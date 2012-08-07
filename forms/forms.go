@@ -27,11 +27,34 @@ func NewFormMetadata(name, action, method string, submit bool) FormMetadata {
 }
 
 // Field represents what each Form Field should be able to do.
+//
+// Validate:
+// Tells us whether the form is valid. This returns a true for success,
+// and a false for failure. Generally if a validation fails it might
+// be helpful to log a message to stdout. Validation doesn't need to
+// change the data on the type but it may, if for example it helps the
+// conversion later on.
+//
+// Name:
+// Name simply returns a string which how the field should be labelled
+// on the form.
+//
+// Convert:
+// Convert takes the data on the form and changed it into a regular Go
+// value. This will return an interface{} so it's vital that you will
+// perform a type assertion on the value before using it where a concrete
+// type is required. If Convert is called before Validate then all bets
+// are off and there are no guarantees that the call to Convert won't
+// panic.
+//
+// Display:
+// Display should return the HTML representation of a Field so that it
+// is easily converted to use within a webpage.
 type Field interface {
-	Validate(interface{}, *http.Request) bool       // Tells us whether the form is valid
-	Name() string                                   // Returns a name for the field
-	Convert(interface{}, *http.Request) interface{} // Converts the form data into Go objects
-	Display() string                                // Asks the field to display itself.
+	Validate(interface{}, *http.Request) bool
+	Name() string
+	Convert(interface{}, *http.Request) interface{}
+	Display() string
 }
 
 // Form is the representation of a HTML form on a webpage.
