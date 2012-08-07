@@ -10,7 +10,7 @@ The Field interface is as follows:
 
       type Field interface {
            Validate(interface{}, *http.Request) bool
-	       Name() string
+           Name() string
            Convert(interface{}, *http.Request) interface{}
            Display() string
       }
@@ -32,3 +32,59 @@ off and I'm not sure if it's entirely possible but we'll see.
 A types Display returns a string of how the Field should be represented in HTML.
 
 As you can see, satisfying this interface is quite simple.
+
+
+An example application which uses wedge/forms can be found below:
+
+.. code-block:: go
+
+    package main
+
+    import (
+        "log"
+        "net/http"
+        "wedge"
+        "wedge/forms"
+    )
+
+    var ExampleForm = forms.NewForm(
+        forms.NewFormMetadata("FormA", "/get/", "POST", true),
+        forms.TextField("user", "Username", 10),
+        forms.CheckField("vehicle", 1,
+            forms.Choice("I have a Bike", "Bike", false),
+            forms.Choice("I have a Car", "Car", true), // TODO: use these check values
+        ),
+        forms.RadioField("vehicle2",
+            forms.Choice("I have a Bike", "Bike", false),
+            forms.Choice("I have a Car", "Car", true),
+        ),
+        forms.PasswordField("password", "Password", 6, 10),
+    )
+
+    func Index(w http.ResponseWriter, req *http.Request) (string, int) {
+        return `<html>` + ExampleForm.Display() + `</html>`, 200
+    }
+
+    func Get(w http.ResponseWriter, req *http.Request) (string, int) {
+
+        // create something to parse our data into
+        var formData map[string]interface{}
+        if ExampleForm.Validate(req) {
+            formData = ExampleForm.Convert(req)
+        } else {
+            return "<html>Failed to validate!</html>", 200
+        }
+
+        // do something with data
+        log.Println(formData)
+        return `<html>` + ExampleForm.Display() + `</html>`, 200
+    }
+
+    func main() {
+        App := wedge.NewAppServer("80", 30)
+        App.AddURLs(
+            wedge.URL("^/?$", "Index", Index, wedge.HTML),
+            wedge.URL("^/get/?$", "Index", Get, wedge.HTML),
+        )
+        App.Run()
+    }

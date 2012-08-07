@@ -64,6 +64,7 @@ func (f Form) Display() string {
 // Validate works on the Field interface. Considering that we will have
 // quite a lot of field types, which need to be grouped onto a Form.
 func (f Form) Validate(req *http.Request) bool {
+	req.ParseForm()
 
 	inputForm := req.Form
 	for key, value := range f.fields {
