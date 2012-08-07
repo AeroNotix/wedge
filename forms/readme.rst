@@ -4,7 +4,7 @@ and creation of HTML web forms.
 Currently there are very few types, however, adding new types is as simple as satisfying
 the Field interface.
 
-The Field interface as as follows:
+The Field interface is as follows:
 
   .. code-block:: go
 
