@@ -33,11 +33,11 @@ type Field interface {
 	Display() string                                // Asks the field to display itself.
 }
 
+// Form is the representation of a HTML form on a webpage.
 type Form struct {
 	md         FormMetadata
 	fields     map[string]Field
 	fieldslice []Field
-	req        *http.Request
 }
 
 // Fields allows you to iterate through the fields and have a custom order, or specialized
@@ -86,8 +86,6 @@ func (f Form) Validate(req *http.Request) bool {
 			return false
 		}
 	}
-
-	f.req = req
 	return true
 }
 
