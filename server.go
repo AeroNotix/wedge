@@ -233,6 +233,10 @@ func (App *AppServer) handle200req(w http.ResponseWriter, req *http.Request, res
 		w.Header().Set("Content-Type", "image/x-icon")
 		io.WriteString(w, resp)
 		return
+	case DOWNLOAD:
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", "attachment")
+		io.WriteString(w, resp)
 	default:
 		panic("Unknown handler type!")
 	}

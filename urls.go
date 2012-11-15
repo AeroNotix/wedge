@@ -82,6 +82,14 @@ func URL(re, name string, v view, t handlertype) *url {
 	return makeurl(re, name, v, t, 0)
 }
 
+// Download is a function which returns a *url value.
+//
+// This function simply gives access to the correct content header types
+// so a file is downloaded instead of displayed.
+func Download(re, name string, v view) *url {
+	return makeurl(re, name, v, DOWNLOAD, 0)
+}
+
 // StaticFiles is a not so light wrapper around the URL function
 //
 // We start off receiving an 'as' string which marks the URL to which

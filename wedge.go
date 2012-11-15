@@ -16,6 +16,7 @@ const (
 	STATIC
 	ICON
 	REDIRECT
+	DOWNLOAD
 )
 
 const (
