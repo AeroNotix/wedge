@@ -8,6 +8,7 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"html/template"
 	"path/filepath"
 	"sort"
 	"time"
@@ -98,6 +99,7 @@ func (App *AppServer) EnableStatTracking() {
 // incrementStats is a non-blocking method to increment a page counter
 // for individual routes.
 func (App *AppServer) incrementStats(k string) {
+	k = template.HTMLEscapeString(k)
 	if App.stat_map == nil {
 		panic("Cannot increment statistics when it has not been enabled!")
 	}
